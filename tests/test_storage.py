@@ -78,3 +78,31 @@ def test_trial_requires_manifest(tmp_path: Path) -> None:
 def test_rejects_path_traversal(tmp_path: Path) -> None:
     with pytest.raises(ResultStoreError):
         JsonResultStore(tmp_path).load_manifest("../x")
+
+
+def test_resolved_model_and_dimensions() -> None:
+    from ai_benchmark.models import ComparisonDimension, Metric, MetricSource
+
+    reported = Metric[str].of("model-x-2026", MetricSource.AGENT_REPORTED)
+    assert AgentRecord.resolve_model("model-x", reported) == "model-x-2026"
+    assert AgentRecord.resolve_model("model-x", Metric[str]()) == "model-x"
+    assert AgentRecord.resolve_model(None, Metric[str]()) is None
+
+    t = trial("r1", "t1", "claude", TrialStatus.PASSED)
+    assert t.dimension_value(ComparisonDimension.MODEL) == "claude-default"
+    t.agent.resolved_model = "m1"
+    assert t.dimension_value(ComparisonDimension.AGENT_MODEL) == "claude:m1"
+    assert t.dimension_value(ComparisonDimension.STACK) == "fastapi"
+    assert t.dimension_value(ComparisonDimension.LANGUAGE) == "python"
+    assert t.comparability_key() == ("task", "1", "standard", "subscription")
+    assert all(t.dimension_value(d) for d in ComparisonDimension)
+
+
+def test_model_filter_uses_resolved_model(tmp_path: Path) -> None:
+    store = JsonResultStore(tmp_path)
+    store.save_manifest(manifest("r1"))
+    t = trial("r1", "t1", "a", TrialStatus.PASSED)
+    t.agent.requested_model = "alias"
+    t.agent.resolved_model = "full-model-id"
+    store.save_trial(t)
+    assert len(list(store.iter_trials(ResultFilter(model="full-model-id")))) == 1

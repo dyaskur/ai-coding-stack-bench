@@ -116,6 +116,16 @@ class BenchmarkOrchestrator:
                 auth = auth or adapter.default_auth(mode)
             if auth is not None:
                 issues.extend(error(problem) for problem in auth.missing())
+        defaults = sorted(k for k, s in selections.items() if s.model is None)
+        if defaults:
+            issues.append(
+                PreflightIssue(
+                    severity="warning",
+                    subject="model",
+                    message=f"no model set for {', '.join(defaults)}: the agent's default "
+                    "model is used, which makes model comparisons less reliable",
+                )
+            )
         if mode is AuthMode.SUBSCRIPTION:
             issues.append(
                 PreflightIssue(

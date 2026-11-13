@@ -77,6 +77,9 @@ def test_preflight_reports_unregistered_agents(settings: PlatformSettings) -> No
     errors = [i for i in issues if i.severity == "error"]
     assert [i.subject for i in errors] == ["a", "b:m"]
     assert any(i.subject == "auth" and i.severity == "warning" for i in issues)
+    model_warning = next(i for i in issues if i.subject == "model")
+    assert model_warning.severity == "warning" and "a" in model_warning.message
+    assert "b:m" not in model_warning.message
 
 
 def test_preflight_checks_credentials_and_auth_support(

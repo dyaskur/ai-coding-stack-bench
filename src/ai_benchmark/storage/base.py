@@ -32,7 +32,7 @@ class ResultFilter(BaseModel):
         checks = (
             (self.run_id, r.run_id),
             (self.agent, r.agent.name),
-            (self.model, r.agent.requested_model),
+            (self.model, r.agent.resolved_model or r.agent.requested_model),
             (self.stack, r.environment.stack),
             (self.language, r.environment.language),
             (self.framework, r.environment.framework),

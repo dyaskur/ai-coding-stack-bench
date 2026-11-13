@@ -2,6 +2,7 @@
 
 from ai_benchmark.models.enums import (
     AuthMode,
+    ComparisonDimension,
     MetricAvailability,
     MetricSource,
     TaskMode,
@@ -30,6 +31,7 @@ __all__ = [
     "AgentRecord",
     "AuthMode",
     "CodeMetrics",
+    "ComparisonDimension",
     "EnvironmentRecord",
     "Metric",
     "MetricAvailability",

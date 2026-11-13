@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ai_benchmark.models.enums import AuthMode, ToolingMode, TrialStatus
+from ai_benchmark.models.enums import AuthMode, ComparisonDimension, ToolingMode, TrialStatus
 from ai_benchmark.models.metrics import Metric, TrialMetrics
 
 
@@ -22,6 +22,25 @@ class AgentRecord(BaseModel):
     reported_model: Metric[str] = Field(default_factory=Metric[str])
     reasoning_effort: str | None = None
     auth_mode: AuthMode
+    resolved_model: str | None = Field(
+        default=None,
+        description="The model used for comparisons: reported model if available, "
+        "else the requested one. None only if neither is known.",
+    )
+
+    @staticmethod
+    def resolve_model(requested: str | None, reported: Metric[str]) -> str | None:
+        if reported.is_available and reported.value:
+            return reported.value
+        return requested
+
+    @property
+    def model_label(self) -> str:
+        return self.resolved_model or f"{self.name}-default"
+
+    @property
+    def agent_model(self) -> str:
+        return f"{self.name}:{self.model_label}"
 
 
 class RateLimitEvent(BaseModel):
@@ -97,6 +116,28 @@ class TrialResult(BaseModel):
     @property
     def rate_limited(self) -> bool:
         return bool(self.rate_limit_events)
+
+    def dimension_value(self, dimension: ComparisonDimension) -> str:
+        """This trial's value on a comparison dimension (used for grouping)."""
+        values = {
+            ComparisonDimension.AGENT: self.agent.name,
+            ComparisonDimension.MODEL: self.agent.model_label,
+            ComparisonDimension.AGENT_MODEL: self.agent.agent_model,
+            ComparisonDimension.STACK: self.environment.stack,
+            ComparisonDimension.LANGUAGE: self.environment.language,
+            ComparisonDimension.FRAMEWORK: self.environment.framework,
+            ComparisonDimension.TASK: self.task_id,
+        }
+        return values[dimension]
+
+    def comparability_key(self) -> tuple[str, str, str, str]:
+        """Trials can only be compared when these match."""
+        return (
+            self.task_id,
+            self.task_version,
+            self.tooling.mode.value,
+            self.agent.auth_mode.value,
+        )
 
 
 class RunManifest(BaseModel):

@@ -57,6 +57,20 @@ class AuthMode(str, Enum):
     """Pay-as-you-go API key. Cost is recorded when the agent reports it."""
 
 
+class ComparisonDimension(str, Enum):
+    """A dimension results can be grouped and compared by (the dashboard's "compare by")."""
+
+    AGENT = "agent"
+    MODEL = "model"
+    """The trial's resolved model."""
+    AGENT_MODEL = "agent_model"
+    """Agent + resolved model: the default unit for model comparisons."""
+    STACK = "stack"
+    LANGUAGE = "language"
+    FRAMEWORK = "framework"
+    TASK = "task"
+
+
 class MetricAvailability(str, Enum):
     """Distinguishes a real value from 'not reported' and from 'does not apply'.
 

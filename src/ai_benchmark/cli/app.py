@@ -387,7 +387,7 @@ def results(
             r.trial_id,
             r.task_id,
             r.agent.name,
-            r.agent.requested_model or "(default)",
+            r.agent.model_label,
             r.environment.stack,
             r.tooling.mode.value,
             r.agent.auth_mode.value,
