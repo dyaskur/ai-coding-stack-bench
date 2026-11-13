@@ -348,7 +348,47 @@ Support filtering results by:
 
 * Tooling mode.
 
+* Auth mode.
+
+* Rate-limited or not.
+
 The results must be reproducible. Store all relevant experiment metadata.
+
+Comparison Views
+
+The platform must answer two questions equally well:
+
+* Stack comparison: for one agent + model, which language/framework stack is fastest?
+
+* Model comparison: for one stack, which agent + model is fastest?
+
+Both are special cases of one pivot: the user picks a "compare by" dimension
+(agent, model, agent + model, stack, language, framework, or task) and fixes
+the others with filters. The CLI and the dashboard use the same comparison
+query, so the dashboard only adds a selector on top of it.
+
+The unit for model comparison is agent + model, because the same model can
+behave differently through different agents. Comparing a model across agents
+is allowed as an explicit pivot ("compare by agent, model fixed").
+
+The model of a trial is its resolved model: the model the agent reported, or,
+if it did not report one, the model requested in the experiment. Experiments
+used for model comparison should always set the model explicitly; a run that
+relies on an agent's default model gets a pre-flight warning.
+
+Rules for a valid comparison:
+
+* All compared groups share the same task and task version, tooling mode and auth mode.
+
+* "Fastest" means the lowest mean agent execution time over trials that
+  passed every acceptance test, always shown together with the success rate
+  and the number of trials. A group with no passing trials is ranked last,
+  not dropped.
+
+* Rate-limited trials are excluded from timing by default and counted separately.
+
+* Means are shown with standard deviations; groups with fewer than the
+  configured minimum number of trials are marked as low confidence.
 
 7\. User Interface
 
@@ -445,7 +485,10 @@ Phase 3:
 
 * Multiple trials.
 
-* Metrics aggregation.
+* Metrics aggregation, including the comparison query (compare by one
+  dimension, filter the rest) and a `benchmark compare` command.
+
+* Flat per-trial exports (CSV/JSONL) that a dashboard can pivot.
 
 * Reports and charts.
 
@@ -455,7 +498,7 @@ Phase 4:
 
 * Parallel execution.
 
-* Web dashboard.
+* Web dashboard with a "compare by" selector (stack comparison, model comparison, or any other dimension).
 
 * Additional agents and benchmark tasks.
 

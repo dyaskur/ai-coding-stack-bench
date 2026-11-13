@@ -31,6 +31,12 @@
    runs record cost as unavailable, run sequentially, and flag trials that hit
    usage limits. See [agent-execution.md](agent-execution.md#auth-modes).
 3. **Target host is a Linux VPS.** See [vps-setup.md](vps-setup.md).
+4. **Two comparison views over one pivot:** stack comparison (agent + model
+   fixed) and model comparison (stack fixed), defined in ARCHITECTURE.md
+   under "Comparison Views". Trial results already carry `resolved_model`,
+   `ComparisonDimension` and `TrialResult.dimension_value()` /
+   `comparability_key()`; the aggregation query and `benchmark compare`
+   come in Phase 3.
 
 ## Open question
 
