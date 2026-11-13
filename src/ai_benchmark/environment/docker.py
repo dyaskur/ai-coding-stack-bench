@@ -65,9 +65,15 @@ class DockerCLI:
 
     def __init__(self, binary: str = "docker", host: str | None = None) -> None:
         self.binary = binary
-        self.env = dict(os.environ)
-        if host:
-            self.env["DOCKER_HOST"] = host
+        self.host = host
+
+    def _env(self) -> dict[str, str]:
+        # Read at call time: `--env NAME` forwards secrets from this process's
+        # environment, which may change after construction.
+        env = dict(os.environ)
+        if self.host:
+            env["DOCKER_HOST"] = self.host
+        return env
 
     def run(
         self,
@@ -86,7 +92,7 @@ class DockerCLI:
                 input=input,
                 text=True,
                 timeout=timeout,
-                env=self.env,
+                env=self._env(),
                 stdout=stdout if stdout is not None else subprocess.PIPE,
                 stderr=stderr if stderr is not None else subprocess.PIPE,
                 check=False,

@@ -158,3 +158,13 @@ def test_pull_policy_never(policy: str) -> None:
     e = DockerExecutionEnvironment(DockerSettings(pull_policy=policy), cli=FakeCLI())  # type: ignore[arg-type]
     with pytest.raises(ExecutionEnvironmentError, match="pull_policy=never"):
         e.prepare_image(STACK)
+
+
+def test_docker_cli_reads_environment_at_call_time(monkeypatch: Any) -> None:
+    from ai_benchmark.environment.docker import DockerCLI
+
+    cli = DockerCLI("docker", host="unix:///tmp/d.sock")
+    monkeypatch.setenv("LATE_SECRET", "s3cret")
+    env = cli._env()
+    assert env["LATE_SECRET"] == "s3cret"
+    assert env["DOCKER_HOST"] == "unix:///tmp/d.sock"
