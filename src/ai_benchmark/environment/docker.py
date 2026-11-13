@@ -410,9 +410,12 @@ class DockerExecutionEnvironment(ExecutionEnvironment):
             parent = posixpath.dirname(target)
             self._root_exec(handle, f"mkdir -p {shlex.quote(parent)}")
             self.cli.run(["cp", str(source), f"{handle.container_id}:{target}"])
+            # Every directory created on the way must belong to the agent, or a CLI
+            # can't add siblings later (e.g. ~/.local/state next to ~/.local/share).
+            owned = AGENT_HOME if target.startswith(AGENT_HOME + "/") else parent
             self._root_exec(
                 handle,
-                f"chown -R {self.agent_uid} {shlex.quote(posixpath.dirname(target))} "
+                f"chown -R {self.agent_uid} {shlex.quote(owned)} "
                 f"&& chmod 600 {shlex.quote(target)}",
             )
         self._root_exec(handle, f"mkdir -p {AGENT_HOME} && chown {self.agent_uid} {AGENT_HOME}")
