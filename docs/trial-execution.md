@@ -73,7 +73,7 @@ trials are kept for debugging.
 acceptance tests, final status with its duration). While the agent works, it
 also logs a heartbeat every 30 seconds with the elapsed time against the
 limit, the number of output lines and a summary of the agent's latest event.
-Set `BENCHMARK_PROGRESS_INTERVAL_SECONDS` to change the interval, or `0` to
+Image builds report their current step the same way and stream their full output to `$TMPDIR/ai-benchmark-builds/<image>.log`; a build that takes longer than `docker.build_timeout_seconds` (default 1800, env `BENCHMARK_DOCKER__BUILD_TIMEOUT_SECONDS`) fails the trial as an infra error. Set `BENCHMARK_PROGRESS_INTERVAL_SECONDS` to change the interval, or `0` to
 turn it off. The agent's full output is streamed to
 `.workspaces/<run>/<trial>/logs/agent.stdout.log`, so `tail -f` on it shows
 every event.

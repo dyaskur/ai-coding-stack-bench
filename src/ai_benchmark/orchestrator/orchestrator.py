@@ -58,8 +58,8 @@ from ai_benchmark.orchestrator.code_metrics import snapshot_baseline, snapshot_r
 from ai_benchmark.orchestrator.junit import parse_junit
 from ai_benchmark.orchestrator.plan import ExperimentPlan, PlannedTrial, build_plan
 from ai_benchmark.orchestrator.policy import apply_auth_policy
-from ai_benchmark.orchestrator.progress import AgentHeartbeat, format_duration
 from ai_benchmark.orchestrator.timing import Stopwatch, utcnow
+from ai_benchmark.progress import AgentHeartbeat, format_duration
 from ai_benchmark.storage.base import ResultStore
 
 log = logging.getLogger(__name__)

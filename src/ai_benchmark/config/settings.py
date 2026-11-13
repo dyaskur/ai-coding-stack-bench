@@ -35,6 +35,9 @@ class DockerSettings(BaseModel):
     agent_node_version: str = Field(
         default="22.11.0", description="Pinned Node.js added to agent images that need it."
     )
+    build_timeout_seconds: int = Field(
+        default=1800, ge=60, description="Longest a single image build may take."
+    )
     docker_binary: str = "docker"
 
 

@@ -186,3 +186,46 @@ def test_docker_cli_never_inherits_stdin(monkeypatch: Any) -> None:
     cli.run(["build", "-"], input="FROM x\n")
     assert seen[0]["stdin"] is subprocess.DEVNULL
     assert seen[1]["stdin"] is None and seen[1]["input"] == "FROM x\n"
+
+
+def test_build_streams_to_log_and_reports_failure(monkeypatch: Any, tmp_path: Path) -> None:
+    from ai_benchmark.errors import ExecutionEnvironmentError
+
+    monkeypatch.setattr("tempfile.gettempdir", lambda: str(tmp_path))
+
+    class FailingBuild(FakeCLI):
+        def run(self, args: Any, **kw: Any) -> subprocess.CompletedProcess[str]:
+            if list(args)[0] == "build":
+                self.calls.append(list(args))
+                assert kw["extra_env"] == {"BUILDKIT_PROGRESS": "plain"}
+                kw["stdout"].write("#7 [4/6] RUN npm install -g x\nnpm error network\n")
+                return subprocess.CompletedProcess(list(args), 1, "", "")
+            return super().run(args, **kw)
+
+    e = env(FailingBuild())
+    stack_image = ImageInfo(stack_id="fastapi", reference="python:3.12")
+    with pytest.raises(ExecutionEnvironmentError, match="npm error network") as err:
+        e.prepare_agent_image(stack_image, LAYER)
+    assert "full log: " in str(err.value)
+    logs = list((tmp_path / "ai-benchmark-builds").glob("*.log"))
+    assert len(logs) == 1 and "npm error network" in logs[0].read_text()
+
+
+def test_build_timeout_is_an_infra_error(monkeypatch: Any, tmp_path: Path) -> None:
+    from ai_benchmark.errors import ExecutionEnvironmentError
+
+    monkeypatch.setattr("tempfile.gettempdir", lambda: str(tmp_path))
+
+    class SlowBuild(FakeCLI):
+        def run(self, args: Any, **kw: Any) -> subprocess.CompletedProcess[str]:
+            if list(args)[0] == "build":
+                assert kw["timeout"] == 120
+                raise subprocess.TimeoutExpired(list(args), 120)
+            return super().run(args, **kw)
+
+    e = DockerExecutionEnvironment(
+        DockerSettings(agent_uid=1000, build_timeout_seconds=120),
+        cli=SlowBuild(),  # type: ignore[arg-type]
+    )
+    with pytest.raises(ExecutionEnvironmentError, match="longer than 120s"):
+        e.prepare_agent_image(ImageInfo(stack_id="fastapi", reference="python:3.12"), LAYER)

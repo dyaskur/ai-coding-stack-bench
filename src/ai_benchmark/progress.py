@@ -1,16 +1,16 @@
-"""Live progress for a running trial.
+"""Live progress for long, otherwise silent steps.
 
-The agent phase can take tens of minutes with nothing on the console, so a
-background thread logs a heartbeat while it runs: elapsed time against the
-limit, how much output the agent has written, and a one-line summary of its
-latest event. It only reads the agent's log file, which the environment
-streams to disk, so it never touches the container or the agent.
+Image builds and the agent run can each take many minutes with nothing on
+the console. A heartbeat thread logs, at a fixed interval, the elapsed time
+and a one-line summary of the step's log file. It only reads that file, which
+is streamed to disk, so it never touches the build, the container or the agent.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import time
 from pathlib import Path
@@ -85,23 +85,41 @@ def read_progress(path: Path) -> tuple[int, str | None]:
     return lines, summarize_line(last) if last is not None else None
 
 
-class AgentHeartbeat:
-    """Logs the agent's progress every ``interval`` seconds while in a ``with`` block."""
+_BUILD_STEP = re.compile(r"^(#\d+ \[[^\]]*\] .*|Step \d+/\d+ : .*)$")
 
-    def __init__(self, trial_id: str, output: Path, limit_seconds: int, interval: float) -> None:
-        self.trial_id = trial_id
-        self.output = output
-        self.limit_seconds = limit_seconds
+
+def last_build_step(path: Path) -> str | None:
+    """The latest build step in a ``docker build`` log (BuildKit plain or classic)."""
+    try:
+        with path.open("rb") as fh:
+            size = fh.seek(0, 2)
+            fh.seek(max(0, size - _TAIL_BYTES))
+            tail = fh.read().decode("utf-8", errors="replace")
+    except OSError:
+        return None
+    step = next((ln for ln in reversed(tail.splitlines()) if _BUILD_STEP.match(ln)), None)
+    return _truncate(" ".join(step.split())) if step else None
+
+
+class Heartbeat:
+    """Calls ``beat`` every ``interval`` seconds while in a ``with`` block."""
+
+    def __init__(self, name: str, interval: float) -> None:
+        self.name = name
         self.interval = interval
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._started = 0.0
 
-    def __enter__(self) -> AgentHeartbeat:
+    @property
+    def elapsed(self) -> float:
+        return time.monotonic() - self._started
+
+    def __enter__(self) -> Heartbeat:
         self._started = time.monotonic()
         if self.interval > 0:
             self._thread = threading.Thread(
-                target=self._loop, name=f"heartbeat-{self.trial_id}", daemon=True
+                target=self._loop, name=f"heartbeat-{self.name}", daemon=True
             )
             self._thread.start()
         return self
@@ -121,12 +139,43 @@ class AgentHeartbeat:
             self.beat()
 
     def beat(self) -> None:
+        raise NotImplementedError
+
+
+class AgentHeartbeat(Heartbeat):
+    """Elapsed time against the limit, output size and the agent's latest event."""
+
+    def __init__(self, trial_id: str, output: Path, limit_seconds: int, interval: float) -> None:
+        super().__init__(trial_id, interval)
+        self.trial_id = trial_id
+        self.output = output
+        self.limit_seconds = limit_seconds
+
+    def beat(self) -> None:
         lines, last = read_progress(self.output)
         log.info(
             "trial %s: agent running %s / %s, %d output lines%s",
             self.trial_id,
-            format_duration(time.monotonic() - self._started),
+            format_duration(self.elapsed),
             format_duration(self.limit_seconds),
             lines,
             f", last: {last}" if last else "",
+        )
+
+
+class BuildHeartbeat(Heartbeat):
+    """Elapsed time and the current step of an image build."""
+
+    def __init__(self, tag: str, build_log: Path, interval: float = 30) -> None:
+        super().__init__(tag, interval)
+        self.tag = tag
+        self.build_log = build_log
+
+    def beat(self) -> None:
+        step = last_build_step(self.build_log)
+        log.info(
+            "building %s: %s%s",
+            self.tag,
+            format_duration(self.elapsed),
+            f", at: {step}" if step else "",
         )
