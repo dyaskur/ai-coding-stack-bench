@@ -101,8 +101,8 @@ def test_preflight_checks_credentials_and_auth_support(
     assert o.plan(cfg, run_id="r1").auth_mode is AuthMode.SUBSCRIPTION
 
 
-def test_execution_is_not_implemented_yet(settings: PlatformSettings) -> None:
-    with pytest.raises(NotImplementedError):
+def test_run_refuses_when_preflight_fails(settings: PlatformSettings) -> None:
+    with pytest.raises(PlanningError, match="no adapter registered"):
         make(settings).run(config())
 
 
