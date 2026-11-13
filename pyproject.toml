@@ -35,6 +35,7 @@ packages = ["src/ai_benchmark"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+norecursedirs = ["fixtures"]
 
 [tool.ruff]
 line-length = 100
