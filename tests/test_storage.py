@@ -106,3 +106,18 @@ def test_model_filter_uses_resolved_model(tmp_path: Path) -> None:
     t.agent.resolved_model = "full-model-id"
     store.save_trial(t)
     assert len(list(store.iter_trials(ResultFilter(model="full-model-id")))) == 1
+
+
+def test_parse_junit(tmp_path: Path) -> None:
+    from ai_benchmark.orchestrator.junit import parse_junit
+
+    f = tmp_path / "j.xml"
+    f.write_text(
+        '<testsuite tests="4"><testcase classname="a" name="ok"/>'
+        '<testcase classname="a" name="bad"><failure/></testcase>'
+        '<testcase classname="a" name="err"><error/></testcase>'
+        '<testcase classname="a" name="skip"><skipped/></testcase></testsuite>'
+    )
+    s = parse_junit(f)
+    assert (s.tests, s.passed, s.failed, s.skipped) == (4, 1, 2, 1)
+    assert s.failed_cases == ["a::bad", "a::err"]
