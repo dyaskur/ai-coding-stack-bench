@@ -9,6 +9,7 @@ and BENCHMARK_IT_TESTER_IMAGE (needs pytest and httpx).
 
 from __future__ import annotations
 
+import base64
 import os
 import shutil
 import subprocess
@@ -89,13 +90,16 @@ class ScriptedAgent(AgentAdapter):
         return AgentAvailability(installed=True)
 
     def build_command(self, task: AgentTask) -> list[str]:
-        app = APP.replace("'", "'\\''")
-        return [
-            "sh",
-            "-c",
-            f"test -n \"$SCRIPTED_TOKEN\" && whoami && printf '%s' '{app}' > app.py "
-            "&& printf 'exec python app.py\\n' > start.sh",
-        ]
+        writes = " && ".join(
+            f"mkdir -p \"$(dirname '{path}')\" && "
+            f"printf '%s' '{base64.b64encode(text.encode()).decode()}' | base64 -d > '{path}'"
+            for path, text in self.files().items()
+        )
+        return ["sh", "-c", f'test -n "$SCRIPTED_TOKEN" && whoami && {writes}']
+
+    def files(self) -> dict[str, str]:
+        """What the stand-in agent writes, by path relative to the workspace."""
+        return {"app.py": APP, "start.sh": "exec python app.py\n"}
 
     def run(self, task: AgentTask, runner: CommandRunner) -> AgentRunResult:
         start = datetime.now(timezone.utc)
@@ -178,3 +182,67 @@ def test_full_trial_in_docker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         capture_output=True, text=True,
     ).stdout.split()  # fmt: skip
     assert left == []
+
+
+REPO = Path(__file__).resolve().parents[2]
+REFERENCE = FIXTURES / "reference-fastapi"
+
+
+class ReferenceAgent(ScriptedAgent):
+    """Writes the reference FastAPI solution for task-management-api."""
+
+    def files(self) -> dict[str, str]:
+        return {p.name: p.read_text() for p in REFERENCE.iterdir() if p.is_file()}
+
+
+def test_reference_solution_passes_the_real_suite(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The shipped fastapi stack + task suite accept a correct implementation.
+
+    Guards the suite itself: a test that a correct solution fails would make every
+    agent look worse. Uses the real stack/task files, with the same image overrides
+    as above (BENCHMARK_IT_FASTAPI_IMAGE replaces the stack Dockerfile).
+    """
+    tasks = tmp_path / "tasks"
+    shutil.copytree(REPO / "benchmarks" / "tasks", tasks)
+    stacks = tmp_path / "stacks"
+    shutil.copytree(REPO / "benchmarks" / "stacks", stacks)
+    stack_file = stacks / "fastapi.yaml"
+    if image := os.environ.get("BENCHMARK_IT_FASTAPI_IMAGE"):
+        text = stack_file.read_text()
+        text = text.replace("dockerfile: fastapi/Dockerfile\n", f"image: {image}\n")
+        stack_file.write_text(text.replace("build_context: fastapi/\n", ""))
+    if TESTER_IMAGE:
+        task_file = tasks / "task-management-api" / "task.yaml"
+        text = task_file.read_text().replace(
+            "  suite: acceptance/\n", f"  suite: acceptance/\n  image: {TESTER_IMAGE}\n"
+        )
+        task_file.write_text(text)
+    settings = PlatformSettings(
+        tasks_dir=tasks,
+        stacks_dir=stacks,
+        results_dir=tmp_path / "results",
+        workspaces_dir=tmp_path / "ws",
+        docker=DockerSettings(),
+    )
+    registry = AgentRegistry()
+    registry._entry_points_loaded = True
+    registry.register(ReferenceAgent)
+    env = DockerExecutionEnvironment(settings.docker, run_id="it-ref")
+    o = BenchmarkOrchestrator(
+        settings, SpecCatalog(settings), registry, env, JsonResultStore(settings.results_dir)
+    )
+    cfg = ExperimentConfig.model_validate(
+        {
+            "task": "task-management-api",
+            "agents": [{"agent": "scripted", "model": "none"}],
+            "stacks": ["fastapi"],
+            "trials": 1,
+        }
+    )
+    monkeypatch.setenv("SCRIPTED_TOKEN", "x")
+    o.run(cfg, run_id="it-ref")
+    [r] = list(o.store.iter_trials())
+    assert r.status is TrialStatus.PASSED, (r.status, r.error, r.log_files)
+    assert (r.metrics.quality.tests_passed.value or 0) >= 50
