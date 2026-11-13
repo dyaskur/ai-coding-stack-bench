@@ -58,6 +58,13 @@ class AcceptanceTests(StrictModel):
         description="Run in the tester container. Must write JUnit XML into /results.",
     )
     results_file: str = Field(default="junit.xml", description="File name inside /results.")
+    completed_exit_codes: list[int] = Field(
+        default_factory=lambda: [0, 1],
+        min_length=1,
+        description="Exit codes meaning the suite ran to the end, whatever the test results. "
+        "pytest exits 1 when tests fail and 2 or more when it was interrupted or could "
+        "not run.",
+    )
     app_start_command: list[str] = Field(
         default_factory=lambda: ["sh", "start.sh"],
         description="Starts the app in the stack container, from the workspace root.",
