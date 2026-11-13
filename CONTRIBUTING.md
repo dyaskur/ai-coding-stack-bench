@@ -11,8 +11,8 @@ Before opening a pull request, all of these must pass:
 
 ```bash
 pytest
-ruff check src tests
-ruff format --check src tests
+ruff check src tests benchmarks
+ruff format --check src tests benchmarks
 mypy src
 ```
 
