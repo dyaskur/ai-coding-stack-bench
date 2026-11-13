@@ -553,8 +553,10 @@ class BenchmarkOrchestrator:
         quality.tests_failed = Metric[int].of(summary.failed, MetricSource.MEASURED)
         quality.repair_iterations = Metric[int].of(0, MetricSource.MEASURED)
         quality.retry_count = Metric[int].of(0, MetricSource.MEASURED)
-        # A tester that timed out or crashed after writing a report did not finish the suite.
-        return quality, files, res.ok
+        # A tester that timed out or crashed after writing a report did not finish the
+        # suite. Failing tests are a normal ending (pytest exits 1 for them).
+        finished = not res.timed_out and res.exit_code in spec.completed_exit_codes
+        return quality, files, finished
 
 
 def _final_status(

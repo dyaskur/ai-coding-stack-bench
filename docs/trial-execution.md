@@ -55,6 +55,9 @@ The agent never sees the suite. After the agent finishes:
    `/results/junit.xml`).
 4. The JUnit XML is parsed per test case. A missing or empty report means
    zero passed tests, never a pass.
+5. The tester must also finish the suite: an exit code outside the suite's
+   `completed_exit_codes` (default 0 and 1, since pytest exits 1 when tests
+   fail) or a timeout keeps the trial from passing and is named in its error.
 
 The tester image is the task's `acceptance_tests.image` if set, otherwise it
 is built from the `Dockerfile` in the suite folder.
