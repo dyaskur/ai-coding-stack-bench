@@ -148,6 +148,7 @@ def test_exec_marks_timeout(tmp_path: Path) -> None:
     res = e.exec(handle, ["sleep", "100"], timeout_seconds=1, stdout_path=tmp_path / "o.log")
     assert res.timed_out and not res.ok
     assert cli.calls[-1][-6:] == ["timeout", "-k", "10", "1", "sleep", "100"]
+    assert "-i" not in cli.calls[-1], "the agent must never get the terminal's stdin"
     assert (tmp_path / "o.log").exists()
 
 
@@ -168,3 +169,20 @@ def test_docker_cli_reads_environment_at_call_time(monkeypatch: Any) -> None:
     env = cli._env()
     assert env["LATE_SECRET"] == "s3cret"
     assert env["DOCKER_HOST"] == "unix:///tmp/d.sock"
+
+
+def test_docker_cli_never_inherits_stdin(monkeypatch: Any) -> None:
+    from ai_benchmark.environment.docker import DockerCLI
+
+    seen: list[dict[str, Any]] = []
+
+    def fake_run(cmd: Any, **kw: Any) -> subprocess.CompletedProcess[str]:
+        seen.append(kw)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cli = DockerCLI("docker")
+    cli.run(["exec", "c", "codex", "exec"])
+    cli.run(["build", "-"], input="FROM x\n")
+    assert seen[0]["stdin"] is subprocess.DEVNULL
+    assert seen[1]["stdin"] is None and seen[1]["input"] == "FROM x\n"

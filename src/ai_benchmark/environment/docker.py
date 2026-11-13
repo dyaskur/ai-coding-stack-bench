@@ -90,6 +90,9 @@ class DockerCLI:
             proc = subprocess.run(
                 cmd,
                 input=input,
+                # Never inherit the terminal's stdin: a command that reads it would
+                # block on the person running the benchmark.
+                stdin=subprocess.DEVNULL if input is None else None,
                 text=True,
                 timeout=timeout,
                 env=self._env(),
@@ -456,7 +459,10 @@ class DockerExecutionEnvironment(ExecutionEnvironment):
         stderr_path: Path | None = None,
     ) -> CommandResult:
         assert handle.container_id
-        args = ["exec", "-i"]
+        # No -i: nothing in a trial reads stdin, and an attached stdin would hand
+        # the agent the terminal running the benchmark (codex exec, for one,
+        # reads stdin to EOF before it starts and would wait forever).
+        args = ["exec"]
         if workdir:
             args += ["-w", workdir]
         for k, v in (env or {}).items():

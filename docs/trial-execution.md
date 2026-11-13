@@ -25,6 +25,8 @@ What `benchmark run` does for each trial, in order. The code lives in
 - The app container runs `sleep infinity` as the non-root user with
   `no-new-privileges`, the stack's resource limits, and the fresh workspace
   bind-mounted at the stack's `workdir`.
+- Commands run with `docker exec` without `-i` and with stdin closed, so an
+  agent can never wait on the terminal that started the benchmark.
 - Secrets are passed as `--env NAME`, so values never appear in a command
   line or a log. Credential files are copied in with mode 600.
 - Every container and network carries `io.ai-benchmark.*` labels, and is
