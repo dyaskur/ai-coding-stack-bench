@@ -65,6 +65,17 @@ and all of them pass), otherwise `failed`. With `stop_on_infra_error`, the
 remaining trials are recorded as `cancelled`. Workspaces of `infra_error`
 trials are kept for debugging.
 
+## Watching a run
+
+`benchmark run` logs each phase of a trial (images, containers, setup, agent,
+acceptance tests, final status with its duration). While the agent works, it
+also logs a heartbeat every 30 seconds with the elapsed time against the
+limit, the number of output lines and a summary of the agent's latest event.
+Set `BENCHMARK_PROGRESS_INTERVAL_SECONDS` to change the interval, or `0` to
+turn it off. The agent's full output is streamed to
+`.workspaces/<run>/<trial>/logs/agent.stdout.log`, so `tail -f` on it shows
+every event.
+
 ## Running the Docker integration test
 
 `tests/integration` runs two real trials with a scripted stand-in agent: a
