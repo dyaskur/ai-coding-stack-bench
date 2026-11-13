@@ -10,9 +10,10 @@ from pathlib import Path
 from string import Template
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from ai_benchmark.config._base import SLUG_PATTERN, StrictModel
+from ai_benchmark.config.stack import _is_pinned
 from ai_benchmark.models.enums import TaskMode
 
 
@@ -63,6 +64,13 @@ class AcceptanceTests(StrictModel):
     )
     app_port: int = Field(default=8000, gt=0, lt=65536)
     result_format: Literal["junit"] = "junit"
+
+    @field_validator("image")
+    @classmethod
+    def _image_pinned(cls, v: str | None) -> str | None:
+        if v is not None and not _is_pinned(v):
+            raise ValueError(f"tester image '{v}' must be pinned to a version tag or digest")
+        return v
 
 
 class Timeouts(StrictModel):

@@ -358,10 +358,14 @@ class BenchmarkOrchestrator:
                 change.files_changed, MetricSource.MEASURED
             )
 
-            quality, test_logs = self.run_acceptance_tests(task, stack, handle, log_dir, plan)
+            quality, test_logs, tester_ok = self.run_acceptance_tests(
+                task, stack, handle, log_dir, plan
+            )
             result.metrics.quality = quality
             result.log_files.update({k: str(v) for k, v in test_logs.items()})
-            result.status = _final_status(agent_result, quality)
+            result.status = _final_status(agent_result, quality, tester_ok)
+            if not tester_ok and result.status is TrialStatus.FAILED and not result.error:
+                result.error = "acceptance tester did not finish cleanly (see acceptance logs)"
         except (ExecutionEnvironmentError, ConfigurationError, AgentExecutionError) as exc:
             log.error("trial %s failed: %s", trial.trial_id, exc)
             result.status = TrialStatus.INFRA_ERROR
@@ -372,11 +376,7 @@ class BenchmarkOrchestrator:
             result.error = f"{type(exc).__name__}: {exc}"
         finally:
             if handle is not None:
-                try:
-                    logs = self.environment.collect_logs(handle, log_dir)
-                    result.log_files.update({k: str(v) for k, v in logs.items()})
-                finally:
-                    self.environment.destroy(handle)
+                self._cleanup(handle, log_dir, result)
             if not self.settings.keep_workspaces and result.status is not TrialStatus.INFRA_ERROR:
                 self.workspaces.remove(plan.run_id, trial.trial_id)
         result.finished_at = utcnow()
@@ -385,6 +385,24 @@ class BenchmarkOrchestrator:
         )
         result.metrics = apply_auth_policy(result.metrics, plan.auth_mode)
         return result
+
+    def _cleanup(self, handle: EnvironmentHandle, log_dir: Path, result: TrialResult) -> None:
+        """Collect logs and destroy the environment; a failure here fails only this trial."""
+        problems = []
+        try:
+            logs = self.environment.collect_logs(handle, log_dir)
+            result.log_files.update({k: str(v) for k, v in logs.items()})
+        except Exception as exc:
+            log.exception("trial %s: collecting logs failed", result.trial_id)
+            problems.append(f"collecting logs failed: {exc}")
+        try:
+            self.environment.destroy(handle)
+        except Exception as exc:
+            log.exception("trial %s: cleanup failed", result.trial_id)
+            problems.append(f"cleanup failed: {exc}")
+        if problems:
+            result.status = TrialStatus.INFRA_ERROR
+            result.error = "; ".join(filter(None, [result.error, *problems]))
 
     def render_prompt(self, task: BenchmarkSpec, stack: StackSpec) -> str:
         """Build the agent prompt from the task template and stack facts."""
@@ -443,12 +461,15 @@ class BenchmarkOrchestrator:
         handle: EnvironmentHandle,
         log_dir: Path,
         plan: ExperimentPlan,
-    ) -> tuple[QualityMetrics, dict[str, Path]]:
-        """Restart the container, start the app, and run the black-box suite against it."""
+    ) -> tuple[QualityMetrics, dict[str, Path], bool]:
+        """Restart the container, start the app, and run the black-box suite against it.
+
+        Returns the quality metrics, log files, and whether the tester finished cleanly.
+        """
         spec = task.acceptance_tests
         quality = QualityMetrics()
         if spec.suite is None:
-            return quality, {}
+            return quality, {}, False
         suite = spec.suite if spec.suite.is_absolute() else (task.source_dir or Path()) / spec.suite
         if not suite.is_dir():
             raise ConfigurationError(f"acceptance suite not found: {suite}")
@@ -469,6 +490,8 @@ class BenchmarkOrchestrator:
         results_dir = log_dir / "acceptance"
         results_dir.mkdir(parents=True, exist_ok=True)
         os.chmod(results_dir, 0o777)  # written by the tester's non-root user
+        # A report left by an earlier run of this trial must never count for this one.
+        (results_dir / spec.results_file).unlink(missing_ok=True)
         res = self.environment.run_job(
             handle,
             tester,
@@ -499,7 +522,7 @@ class BenchmarkOrchestrator:
             quality.tests_passed = Metric[int].unavailable(note)
             quality.tests_failed = Metric[int].unavailable(note)
             quality.tests_total = Metric[int].unavailable(note)
-            return quality, files
+            return quality, files, False
         files["acceptance-junit"] = junit
         summary = parse_junit(junit)
         quality.tests_total = Metric[int].of(summary.tests, MetricSource.MEASURED)
@@ -507,10 +530,13 @@ class BenchmarkOrchestrator:
         quality.tests_failed = Metric[int].of(summary.failed, MetricSource.MEASURED)
         quality.repair_iterations = Metric[int].of(0, MetricSource.MEASURED)
         quality.retry_count = Metric[int].of(0, MetricSource.MEASURED)
-        return quality, files
+        # A tester that timed out or crashed after writing a report did not finish the suite.
+        return quality, files, res.ok
 
 
-def _final_status(agent: AgentRunResult, quality: QualityMetrics) -> TrialStatus:
+def _final_status(
+    agent: AgentRunResult, quality: QualityMetrics, tester_ok: bool = True
+) -> TrialStatus:
     if agent.timed_out:
         return TrialStatus.TIMED_OUT
     if agent.stopped_by_rate_limit:
@@ -518,7 +544,8 @@ def _final_status(agent: AgentRunResult, quality: QualityMetrics) -> TrialStatus
     if not agent.succeeded:
         return TrialStatus.AGENT_ERROR
     passed, total = quality.tests_passed, quality.tests_total
-    if passed.is_available and total.is_available and passed.value == total.value and total.value:
+    all_passed = passed.is_available and total.is_available and passed.value == total.value
+    if tester_ok and all_passed and total.value:
         return TrialStatus.PASSED
     return TrialStatus.FAILED
 

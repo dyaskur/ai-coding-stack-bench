@@ -125,3 +125,12 @@ def test_settings_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     s = PlatformSettings()
     assert s.results_dir == Path("/tmp/out")
     assert s.docker.default_memory_limit == "8g"
+
+
+@pytest.mark.parametrize("image", ["tester", "tester:latest"])
+def test_tester_image_must_be_pinned(image: str) -> None:
+    from ai_benchmark.config.task import AcceptanceTests
+
+    with pytest.raises(ValueError, match="must be pinned"):
+        AcceptanceTests(image=image)
+    assert AcceptanceTests(image="tester:1.2").image == "tester:1.2"
