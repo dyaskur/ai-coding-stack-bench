@@ -1,0 +1,4 @@
+{"type":"step_start","timestamp":1763000000000,"sessionID":"ses_1","part":{"id":"prt_1","type":"step-start"}}
+{"type":"text","timestamp":1763000001000,"sessionID":"ses_1","part":{"id":"prt_2","type":"text","text":"Creating files"}}
+{"type":"step_finish","timestamp":1763000002000,"sessionID":"ses_1","part":{"id":"prt_3","type":"step-finish","reason":"tool-calls","cost":0.01,"tokens":{"input":1200,"output":300,"reasoning":20,"cache":{"read":800,"write":100}}}}
+{"type":"step_finish","timestamp":1763000003000,"sessionID":"ses_1","part":{"id":"prt_4","type":"step-finish","reason":"stop","cost":0.005,"tokens":{"input":100,"output":50,"reasoning":0,"cache":{"read":2000,"write":0}}}}

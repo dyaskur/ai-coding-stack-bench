@@ -1,0 +1,1 @@
+{"type":"result","subtype":"success","is_error":true,"duration_ms":900,"num_turns":3,"result":"Usage limit reached · resets 3pm (UTC)","session_id":"s-2","total_cost_usd":0,"usage":{"input_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0},"modelUsage":{}}
