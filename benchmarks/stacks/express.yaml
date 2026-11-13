@@ -1,0 +1,19 @@
+id: express
+language: javascript
+language_version: "22"
+framework: express
+framework_version: "4.21"
+description: Node.js 22 with Express, backed by PostgreSQL.
+image: node:22.11.0-bookworm-slim
+workdir: /workspace
+env:
+  DATABASE_URL: postgresql://bench:bench@postgres:5432/bench
+services:
+  - name: postgres
+    image: postgres:16.4-alpine
+    env:
+      POSTGRES_USER: bench
+      POSTGRES_PASSWORD: bench
+      POSTGRES_DB: bench
+    ports: [5432]
+    healthcheck: [pg_isready, -U, bench]

@@ -1,0 +1,25 @@
+id: fastapi
+language: python
+language_version: "3.12"
+framework: fastapi
+framework_version: "0.115"
+description: Python 3.12 with FastAPI, uvicorn and pytest, backed by PostgreSQL.
+# Pinned base image. A dedicated Dockerfile under environments/ replaces this in Phase 2.
+image: python:3.12.7-slim-bookworm
+workdir: /workspace
+env:
+  DATABASE_URL: postgresql://bench:bench@postgres:5432/bench
+  PYTHONDONTWRITEBYTECODE: "1"
+setup_commands: []
+services:
+  - name: postgres
+    image: postgres:16.4-alpine
+    env:
+      POSTGRES_USER: bench
+      POSTGRES_PASSWORD: bench
+      POSTGRES_DB: bench
+    ports: [5432]
+    healthcheck: [pg_isready, -U, bench]
+resources:
+  cpus: 2
+  memory: 4g

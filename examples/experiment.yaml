@@ -1,0 +1,26 @@
+# Example experiment. Run with: benchmark run --config examples/experiment.yaml --dry-run
+task: task-management-api
+agents:
+  - agent: codex
+    model: gpt-5-codex
+  - agent: claude
+    model: claude-sonnet-5-5
+    reasoning_effort: high
+  - agent: opencode
+    # Override the adapter's default credentials (names/paths only, never values):
+    # auth:
+    #   mode: subscription
+    #   files:
+    #     - source: ~/.local/share/opencode/auth.json
+    #       target: /home/agent/.local/share/opencode/auth.json
+stacks: [fastapi, laravel, express]
+trials: 5
+tooling:
+  mode: standard
+# subscription (default): cost recorded as unavailable, limit hits flagged.
+# api_key: cost recorded when the agent reports it. Never mix modes in one run.
+auth_mode: subscription
+randomize_order: true
+seed: 42
+labels:
+  purpose: example

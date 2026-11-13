@@ -1,0 +1,52 @@
+# Example benchmark task. The acceptance suite itself is added in Phase 2.
+id: task-management-api
+name: Task Management REST API
+version: "1"
+description: >
+  Build a JSON REST API for managing projects and tasks, with persistence in
+  the provided relational database.
+
+functional_requirements:
+  - CRUD endpoints for projects (/projects) and tasks (/projects/{id}/tasks).
+  - Tasks have a title, optional description, status (todo, in_progress, done) and optional due date.
+  - Listing tasks supports filtering by status and pagination (page, per_page).
+  - Validation errors return HTTP 422 with a JSON body describing each invalid field.
+  - Unknown resources return HTTP 404.
+
+technical_requirements:
+  - Use the framework's idiomatic project layout and ORM/migrations.
+  - Read database settings from environment variables.
+  - The server listens on 0.0.0.0:8000.
+  - Include a README section explaining how to start the server.
+
+initial_state:
+  mode: build_from_scratch
+
+prompt_template: |
+  You are implementing "$task_name" using $framework $framework_version on
+  $language $language_version. The project lives in the current directory
+  (mounted at $workdir in the runtime container).
+
+  $description
+
+  Functional requirements:
+  $functional_requirements
+
+  Technical requirements:
+  $technical_requirements
+
+  Work autonomously until the implementation is complete. Do not ask questions.
+
+supported_stacks: [fastapi, laravel, express]
+
+acceptance_tests:
+  suite: acceptance/
+  command: [sh, /acceptance/run.sh]
+  result_format: junit
+
+timeouts:
+  setup_seconds: 600
+  agent_seconds: 1800
+  tests_seconds: 600
+
+default_trials: 3
