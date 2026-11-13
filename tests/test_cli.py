@@ -58,9 +58,9 @@ def test_run_dry_run_shows_plan() -> None:
     assert "8 trial(s)" in result.output
 
 
-def test_run_without_adapters_fails_preflight() -> None:
+def test_run_with_unknown_adapter_fails_preflight() -> None:
     result = invoke(
-        "run", "--agents", "codex", "--task", "task-management-api", "--stacks", "fastapi"
+        "run", "--agents", "missing-agent", "--task", "task-management-api", "--stacks", "fastapi"
     )
     assert result.exit_code == 1
 
