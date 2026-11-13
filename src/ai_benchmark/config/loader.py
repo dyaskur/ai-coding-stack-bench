@@ -60,7 +60,8 @@ def load_task(path: Path) -> BenchmarkSpec:
 
 
 def load_stack(path: Path) -> StackSpec:
-    return load_model(path, StackSpec)
+    spec = load_model(path, StackSpec)
+    return spec.model_copy(update={"source_dir": path.parent.resolve()})
 
 
 def load_experiment(path: Path) -> ExperimentConfig:

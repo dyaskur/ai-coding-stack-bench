@@ -41,8 +41,8 @@ supported_stacks: [fastapi, laravel, express]
 
 acceptance_tests:
   suite: acceptance/
-  command: [sh, /acceptance/run.sh]
-  result_format: junit
+  app_start_command: [sh, start.sh]
+  app_port: 8000
 
 timeouts:
   setup_seconds: 600
