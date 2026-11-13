@@ -60,8 +60,14 @@ class StackSpec(StrictModel):
     description: str | None = None
 
     image: str | None = Field(default=None, description="Pinned prebuilt image reference.")
-    dockerfile: Path | None = Field(default=None, description="Dockerfile to build the image from.")
-    build_context: Path | None = None
+    dockerfile: Path | None = Field(
+        default=None, description="Dockerfile to build the image from, relative to the stack file."
+    )
+    build_context: Path | None = Field(
+        default=None,
+        description="Build context relative to the stack file (default: the "
+        "Dockerfile's directory).",
+    )
 
     workdir: str = "/workspace"
     env: dict[str, str] = Field(default_factory=dict)
@@ -70,8 +76,8 @@ class StackSpec(StrictModel):
     )
     services: list[ServiceSpec] = Field(default_factory=list)
     resources: ResourceLimits = Field(default_factory=ResourceLimits)
-    network: bool = Field(
-        default=True, description="Whether the stack container gets outbound network access."
+    source_dir: Path | None = Field(
+        default=None, exclude=True, description="Set by the loader; not part of the file."
     )
 
     @model_validator(mode="after")
@@ -83,6 +89,12 @@ class StackSpec(StrictModel):
                 f"image '{self.image}' must be pinned to a version tag or digest (not 'latest')"
             )
         return self
+
+    def resolve(self, path: Path) -> Path:
+        """Resolve a path from the stack file against the file's directory."""
+        if path.is_absolute() or self.source_dir is None:
+            return path
+        return self.source_dir / path
 
     @property
     def label(self) -> str:

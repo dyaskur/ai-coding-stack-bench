@@ -38,7 +38,8 @@
    `comparability_key()`; the aggregation query and `benchmark compare`
    come in Phase 3.
 
-## Open question
+## Resolved in Phase 2
 
-- **Acceptance result format.** `AcceptanceTests.result_format` defaults to
-  JUnit XML; confirm all stacks' test runners can emit it.
+- **Acceptance result format.** JUnit XML. The suite runs in its own tester
+  container (pytest by default) against the app over HTTP, so stacks never
+  need to emit JUnit themselves. See [trial-execution.md](trial-execution.md).

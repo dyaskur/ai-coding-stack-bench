@@ -87,15 +87,14 @@ def test_extend_mode_requires_template(tmp_path: Path) -> None:
         load_task(f)
 
 
-def test_acceptance_command_must_cover_stacks(tmp_path: Path) -> None:
-    f = tmp_path / "task.yaml"
-    f.write_text(
-        "id: t\nname: T\ndescription: d\nfunctional_requirements: [a]\n"
-        "prompt_template: x\nsupported_stacks: [fastapi, laravel]\n"
-        "acceptance_tests: {per_stack: {fastapi: [pytest]}}\n"
-    )
-    with pytest.raises(ConfigurationError, match="laravel"):
-        load_task(f)
+def test_acceptance_defaults_and_stack_source_dir(settings: PlatformSettings) -> None:
+    catalog = SpecCatalog(settings)
+    spec = catalog.get_task("task-management-api").acceptance_tests
+    assert spec.app_start_command == ["sh", "start.sh"] and spec.app_port == 8000
+    assert "--junitxml=/results/junit.xml" in spec.command
+    stack = catalog.get_stack("fastapi")
+    assert stack.source_dir is not None
+    assert stack.resolve(Path("x/Dockerfile")) == stack.source_dir / "x/Dockerfile"
 
 
 def test_agent_selection_parse() -> None:
@@ -126,3 +125,12 @@ def test_settings_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     s = PlatformSettings()
     assert s.results_dir == Path("/tmp/out")
     assert s.docker.default_memory_limit == "8g"
+
+
+@pytest.mark.parametrize("image", ["tester", "tester:latest"])
+def test_tester_image_must_be_pinned(image: str) -> None:
+    from ai_benchmark.config.task import AcceptanceTests
+
+    with pytest.raises(ValueError, match="must be pinned"):
+        AcceptanceTests(image=image)
+    assert AcceptanceTests(image="tester:1.2").image == "tester:1.2"

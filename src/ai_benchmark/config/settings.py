@@ -27,7 +27,15 @@ class DockerSettings(BaseModel):
     network_name_prefix: str = "ai-benchmark"
     label_prefix: str = "io.ai-benchmark"
     cleanup: bool = Field(default=True, description="Remove containers/networks after each trial.")
-    run_as_user: str | None = Field(default="1000:1000", description="Non-root user in containers.")
+    agent_uid: int | None = Field(
+        default=None,
+        description="UID of the non-root user inside trial containers. None = the host "
+        "user's UID (so workspace files stay owned by you), or 1000 when running as root.",
+    )
+    agent_node_version: str = Field(
+        default="22.11.0", description="Pinned Node.js added to agent images that need it."
+    )
+    docker_binary: str = "docker"
 
 
 class PlatformSettings(BaseSettings):

@@ -8,10 +8,12 @@ from __future__ import annotations
 
 from pathlib import Path
 from string import Template
+from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from ai_benchmark.config._base import SLUG_PATTERN, StrictModel
+from ai_benchmark.config.stack import _is_pinned
 from ai_benchmark.models.enums import TaskMode
 
 
@@ -31,19 +33,44 @@ class InitialState(StrictModel):
 
 
 class AcceptanceTests(StrictModel):
-    """How the independent acceptance suite is run. Execution itself lands in Phase 2."""
+    """How the independent, black-box acceptance suite is run.
+
+    After the agent finishes, the stack container is restarted (killing
+    anything the agent left running), the app is started with
+    ``app_start_command``, and the suite runs in a separate tester container
+    on the trial network against ``http://app:<app_port>``. The agent never
+    sees the suite.
+    """
 
     suite: Path | None = Field(
-        default=None, description="Test files mounted read-only after the agent finishes."
+        default=None,
+        description="Suite directory relative to the task file, mounted read-only at "
+        "/acceptance in the tester container. Unless 'image' is set, the tester image "
+        "is built from the suite's Dockerfile. None = no acceptance tests "
+        "(quality is unavailable).",
     )
-    command: list[str] | None = Field(default=None, description="Default command for all stacks.")
-    per_stack: dict[str, list[str]] = Field(
-        default_factory=dict, description="Stack id -> command, overriding 'command'."
+    image: str | None = Field(
+        default=None,
+        description="Pinned, prebuilt tester image. Takes precedence over the suite's Dockerfile.",
     )
-    result_format: str = Field(default="junit", description="How passed/failed counts are parsed.")
+    command: list[str] = Field(
+        default_factory=lambda: ["pytest", "-q", "/acceptance", "--junitxml=/results/junit.xml"],
+        description="Run in the tester container. Must write JUnit XML into /results.",
+    )
+    results_file: str = Field(default="junit.xml", description="File name inside /results.")
+    app_start_command: list[str] = Field(
+        default_factory=lambda: ["sh", "start.sh"],
+        description="Starts the app in the stack container, from the workspace root.",
+    )
+    app_port: int = Field(default=8000, gt=0, lt=65536)
+    result_format: Literal["junit"] = "junit"
 
-    def command_for(self, stack_id: str) -> list[str] | None:
-        return self.per_stack.get(stack_id, self.command)
+    @field_validator("image")
+    @classmethod
+    def _image_pinned(cls, v: str | None) -> str | None:
+        if v is not None and not _is_pinned(v):
+            raise ValueError(f"tester image '{v}' must be pinned to a version tag or digest")
+        return v
 
 
 class Timeouts(StrictModel):
@@ -85,14 +112,6 @@ class BenchmarkSpec(StrictModel):
     source_dir: Path | None = Field(
         default=None, exclude=True, description="Set by the loader; not part of the file."
     )
-
-    @model_validator(mode="after")
-    def _tests_cover_stacks(self) -> BenchmarkSpec:
-        if self.acceptance_tests.command is None:
-            missing = [s for s in self.supported_stacks if s not in self.acceptance_tests.per_stack]
-            if missing:
-                raise ValueError(f"no acceptance test command for stacks: {', '.join(missing)}")
-        return self
 
     def supports(self, stack_id: str) -> bool:
         return stack_id in self.supported_stacks
