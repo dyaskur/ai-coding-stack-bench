@@ -4,11 +4,21 @@ language_version: "8.3"
 framework: laravel
 framework_version: "11"
 description: PHP 8.3 with Composer and Laravel 11, backed by MySQL.
-image: php:8.3.13-cli-bookworm
+# Built from laravel/Dockerfile (PHP extensions + pinned Composer).
+dockerfile: laravel/Dockerfile
+build_context: laravel/
 workdir: /workspace
+environment_notes: |
+  - MySQL 8.4 is running at host "mysql", port 3306. Its settings are in the
+    DB_CONNECTION, DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME and DB_PASSWORD
+    environment variables.
+  - PHP 8.3 with pdo_mysql, zip, intl, bcmath and pcntl, and Composer 2.8 are installed.
+    Create the Laravel 11 project in the current directory with Composer (it already
+    holds a .git folder, so create it elsewhere and move it in if needed).
 env:
   DB_CONNECTION: mysql
   DB_HOST: mysql
+  DB_PORT: "3306"
   DB_DATABASE: bench
   DB_USERNAME: bench
   DB_PASSWORD: bench

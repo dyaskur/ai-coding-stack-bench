@@ -413,6 +413,7 @@ class BenchmarkOrchestrator:
                 "framework": stack.framework,
                 "framework_version": stack.framework_version,
                 "workdir": stack.workdir,
+                "environment_notes": stack.environment_notes.strip(),
             }
         )
 

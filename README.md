@@ -64,14 +64,16 @@ tests/                   Unit tests (pytest); tests/integration needs Docker
 
 - **New agent:** subclass `ai_benchmark.agents.AgentAdapter` and register it with
   `@register_agent` or an `ai_benchmark.agents` entry point in your package. No core changes.
-- **New stack:** add `benchmarks/stacks/<id>.yaml` with a pinned image or Dockerfile.
-- **New task:** add `benchmarks/tasks/<id>/task.yaml`.
+- **New stack:** add `benchmarks/stacks/<id>.yaml` with a pinned image or Dockerfile, and
+  `environment_notes` telling the agent where its database is.
+- **New task:** add `benchmarks/tasks/<id>/task.yaml` and an HTTP acceptance suite in
+  `acceptance/` (see [docs/trial-execution.md](docs/trial-execution.md#writing-an-acceptance-suite)).
 
 ## Development
 
 ```bash
 pytest
-ruff check src tests
+ruff check src tests benchmarks
 mypy src
 BENCHMARK_DOCKER_TESTS=1 pytest tests/integration   # one real trial in Docker
 ```

@@ -101,7 +101,7 @@ class BenchmarkSpec(StrictModel):
     prompt_template: str = Field(
         description="string.Template text. Available: $task_name, $description, "
         "$functional_requirements, $technical_requirements, $language, $language_version, "
-        "$framework, $framework_version, $workdir."
+        "$framework, $framework_version, $workdir, $environment_notes."
     )
     supported_stacks: list[str] = Field(min_length=1)
     acceptance_tests: AcceptanceTests
