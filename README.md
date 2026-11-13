@@ -52,6 +52,11 @@ benchmark run --agents codex:gpt-6-luna --task task-management-api \
               --trials 20 --auth subscription
 ```
 
+The [20-trial Luna results](docs/luna-latest-20-trials.md) record the run IDs,
+test outcomes, timing, token use, cost estimate, and differences in each
+stack's starting state. Laravel setup retries transient Composer failures
+before the agent starts.
+
 Platform settings come from `BENCHMARK_*` environment variables (nested with
 `__`, e.g. `BENCHMARK_DOCKER__DEFAULT_MEMORY_LIMIT=8g`) or global CLI options
 such as `--results-dir`.

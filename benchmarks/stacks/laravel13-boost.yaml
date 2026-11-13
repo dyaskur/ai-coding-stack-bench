@@ -19,8 +19,30 @@ environment_notes: |
     adds /api to routes/api.php by default; set apiPrefix to an empty string
     in bootstrap/app.php or register those routes without that prefix.
 setup_commands:
-  - [sh, -lc, "composer create-project laravel/laravel /workspace ^13.0 --no-interaction --prefer-dist --no-progress"]
-  - [sh, -lc, "composer require laravel/boost --dev --no-interaction --no-progress"]
+  - - sh
+    - -lc
+    - |
+      set -e
+      for attempt in 1 2 3; do
+        rm -rf /tmp/laravel-starter
+        if composer create-project laravel/laravel /tmp/laravel-starter ^13.0 --no-interaction --prefer-dist --no-progress; then
+          cp -a /tmp/laravel-starter/. /workspace/
+          exit 0
+        fi
+        sleep "$((attempt * 3))"
+      done
+      exit 1
+  - - sh
+    - -lc
+    - |
+      set -e
+      for attempt in 1 2 3; do
+        if composer require laravel/boost --dev --no-interaction --no-progress; then
+          exit 0
+        fi
+        sleep "$((attempt * 3))"
+      done
+      exit 1
   - [php, artisan, boost:install, --guidelines, --skills, --mcp, --no-interaction]
   - [sh, -lc, "if command -v codex >/dev/null 2>&1; then codex mcp add laravel-boost -- php artisan boost:mcp; fi"]
 env:
