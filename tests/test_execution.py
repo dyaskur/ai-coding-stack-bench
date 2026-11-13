@@ -130,6 +130,7 @@ def test_rate_limit_and_agent_error(env_settings: PlatformSettings) -> None:
     o.run(experiment(), run_id="r-agent-error")
     [r] = list(o.store.iter_trials(ResultFilter(run_id="r-agent-error")))
     assert r.status is TrialStatus.AGENT_ERROR
+    assert r.error == "agent exited with code 2"
 
 
 def test_infra_error_is_recorded_and_can_abort(env_settings: PlatformSettings) -> None:

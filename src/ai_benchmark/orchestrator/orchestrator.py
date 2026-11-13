@@ -433,6 +433,8 @@ class BenchmarkOrchestrator:
                 result.log_files[name] = str(path)
         if agent.error:
             result.error = agent.error
+        elif not agent.timed_out and not agent.succeeded:
+            result.error = f"agent exited with code {agent.exit_code}"
 
     def run_acceptance_tests(
         self,
