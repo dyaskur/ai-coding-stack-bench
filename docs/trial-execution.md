@@ -67,8 +67,11 @@ trials are kept for debugging.
 
 ## Running the Docker integration test
 
-`tests/integration` runs one real trial with a scripted stand-in agent, a
-Redis service and a small acceptance suite:
+`tests/integration` runs two real trials with a scripted stand-in agent: a
+tiny app with a Redis service, and a reference FastAPI solution of
+`task-management-api` on the shipped `fastapi` stack and Postgres, checked by
+the task's real acceptance suite. The second one guards the suite itself: a
+correct solution must pass every test.
 
 ```bash
 BENCHMARK_DOCKER_TESTS=1 pytest tests/integration
@@ -76,5 +79,15 @@ BENCHMARK_DOCKER_TESTS=1 pytest tests/integration
 
 On a host whose containers can't reach package mirrors, point it at prebuilt
 images: `BENCHMARK_IT_STACK_IMAGE` (with git, curl and CA certificates, for
-example `python:3.12.7-bookworm`) and `BENCHMARK_IT_TESTER_IMAGE` (with
-pytest and httpx).
+example `python:3.12.7-bookworm`), `BENCHMARK_IT_FASTAPI_IMAGE` (an image
+equivalent to `benchmarks/stacks/fastapi/Dockerfile`) and
+`BENCHMARK_IT_TESTER_IMAGE` (with pytest and httpx).
+
+## Writing an acceptance suite
+
+- Test only the HTTP contract written in the task's requirements. The suite
+  runs from its own container and must not depend on the stack.
+- The database survives restarts and may hold the agent's own test data, so
+  create what each test needs and never assume an empty table.
+- Change the suite and the task's requirements together and bump the task's
+  `version`, so results from different suites are never compared.
