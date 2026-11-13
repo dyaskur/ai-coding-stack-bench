@@ -33,7 +33,7 @@ initial_state:
 prompt_template: |
   You are implementing "$task_name" using $framework $framework_version on
   $language $language_version. The project lives in the current directory
-  ($workdir), which is empty apart from a git repository.
+  ($workdir), which may contain a stack-provided starter project.
 
   $description
 
@@ -50,7 +50,7 @@ prompt_template: |
   an automated HTTP test suite against exactly the requirements above.
   Work autonomously until the implementation is complete. Do not ask questions.
 
-supported_stacks: [fastapi, laravel, express]
+supported_stacks: [fastapi, fastapi-latest, laravel, laravel13-boost, express, express-latest]
 
 acceptance_tests:
   suite: acceptance/

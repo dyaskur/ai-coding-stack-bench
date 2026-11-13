@@ -1,0 +1,45 @@
+id: laravel13-boost
+language: php
+language_version: "8.5.12"
+framework: laravel
+framework_version: "13"
+description: PHP 8.5.12, Laravel 13, and Laravel Boost, backed by MySQL.
+dockerfile: laravel13-boost/Dockerfile
+build_context: laravel13-boost/
+workdir: /workspace
+environment_notes: |
+  - The Laravel 13 starter project and Laravel Boost are installed before you begin.
+    Use the Laravel Boost guidance and MCP tools available to your agent.
+  - MySQL 8.4 is running at host "mysql", port 3306. Its settings are in the
+    DB_CONNECTION, DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME and DB_PASSWORD
+    environment variables.
+  - In start.sh, use php artisan serve --no-reload so the server keeps the
+    provided DB_* environment variables.
+  - The required HTTP paths start at /projects, not /api/projects. Laravel
+    adds /api to routes/api.php by default; set apiPrefix to an empty string
+    in bootstrap/app.php or register those routes without that prefix.
+setup_commands:
+  - [sh, -lc, "composer create-project laravel/laravel /workspace ^13.0 --no-interaction --prefer-dist --no-progress"]
+  - [sh, -lc, "composer require laravel/boost --dev --no-interaction --no-progress"]
+  - [php, artisan, boost:install, --guidelines, --skills, --mcp, --no-interaction]
+  - [sh, -lc, "if command -v codex >/dev/null 2>&1; then codex mcp add laravel-boost -- php artisan boost:mcp; fi"]
+env:
+  DB_CONNECTION: mysql
+  DB_HOST: mysql
+  DB_PORT: "3306"
+  DB_DATABASE: bench
+  DB_USERNAME: bench
+  DB_PASSWORD: bench
+services:
+  - name: mysql
+    image: mysql:8.4.13
+    env:
+      MYSQL_DATABASE: bench
+      MYSQL_USER: bench
+      MYSQL_PASSWORD: bench
+      MYSQL_ROOT_PASSWORD: root
+    ports: [3306]
+    healthcheck: [mysqladmin, ping, -h, 127.0.0.1]
+resources:
+  cpus: 2
+  memory: 4g

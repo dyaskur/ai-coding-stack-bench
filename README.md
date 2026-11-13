@@ -38,6 +38,20 @@ benchmark results [--agent X --stack Y --mode standard --not-rate-limited ...]
 benchmark report                     # Phase 3
 ```
 
+The `fastapi-latest`, `express-latest`, and `laravel13-boost` stacks pin the
+newer runtime and framework versions used for the updated benchmark. The
+`laravel13-boost` stack provides a Laravel 13 starter project and installs
+Laravel Boost before the agent starts. Boost guidelines, skills, and MCP tools
+are available to supported agents. Setup time is outside the agent timer, and
+this stack starts from a scaffold; compare it separately from the empty-folder
+`laravel` (Laravel 11) baseline. For example:
+
+```bash
+benchmark run --agents codex:gpt-6-luna --task task-management-api \
+              --stacks fastapi-latest,laravel13-boost,express-latest \
+              --trials 20 --auth subscription
+```
+
 Platform settings come from `BENCHMARK_*` environment variables (nested with
 `__`, e.g. `BENCHMARK_DOCKER__DEFAULT_MEMORY_LIMIT=8g`) or global CLI options
 such as `--results-dir`.
