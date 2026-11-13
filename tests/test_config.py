@@ -68,9 +68,12 @@ def test_prompt_rendering(settings: PlatformSettings) -> None:
             framework="fastapi",
             framework_version="0.115",
             workdir="/workspace",
+            environment_notes="- Postgres at host postgres",
         )
     )
-    assert "fastapi 0.115" in prompt and "- CRUD endpoints" in prompt
+    assert "fastapi 0.115" in prompt and "POST /projects creates a project" in prompt
+    assert "Environment:\n- Postgres at host postgres" in prompt
+    assert "sh start.sh" in prompt
     with pytest.raises(KeyError):
         task.render_prompt({})
 
@@ -125,3 +128,24 @@ def test_settings_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     s = PlatformSettings()
     assert s.results_dir == Path("/tmp/out")
     assert s.docker.default_memory_limit == "8g"
+
+
+def test_shipped_stacks_build_from_files_and_describe_their_environment(
+    settings: PlatformSettings,
+) -> None:
+    catalog = SpecCatalog(settings)
+    for stack_id in ("fastapi", "laravel"):
+        stack = catalog.get_stack(stack_id)
+        assert stack.dockerfile is not None
+        assert stack.resolve(stack.dockerfile).is_file()
+    for stack_id in catalog.get_task("task-management-api").supported_stacks:
+        # Every stack the task runs on must tell the agent where its database is.
+        assert catalog.get_stack(stack_id).environment_notes.strip(), stack_id
+
+
+def test_shipped_task_has_its_acceptance_suite(settings: PlatformSettings) -> None:
+    task = SpecCatalog(settings).get_task("task-management-api")
+    assert task.acceptance_tests.suite is not None and task.source_dir is not None
+    suite = task.source_dir / task.acceptance_tests.suite
+    assert (suite / "Dockerfile").is_file()
+    assert len(list(suite.glob("test_*.py"))) >= 4

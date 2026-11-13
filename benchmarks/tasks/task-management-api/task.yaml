@@ -1,23 +1,31 @@
-# Example benchmark task. The acceptance suite itself is added in Phase 2.
+# Benchmark task: build a small REST API from an empty folder.
+# The acceptance suite in acceptance/ checks exactly the contract below over HTTP,
+# so every stack is judged by the same tests. Change both together and bump `version`.
 id: task-management-api
 name: Task Management REST API
 version: "1"
 description: >
-  Build a JSON REST API for managing projects and tasks, with persistence in
-  the provided relational database.
+  Build a JSON REST API for managing projects and the tasks inside them,
+  persisted in the provided relational database.
 
 functional_requirements:
-  - CRUD endpoints for projects (/projects) and tasks (/projects/{id}/tasks).
-  - Tasks have a title, optional description, status (todo, in_progress, done) and optional due date.
-  - Listing tasks supports filtering by status and pagination (page, per_page).
-  - Validation errors return HTTP 422 with a JSON body describing each invalid field.
-  - Unknown resources return HTTP 404.
+  - "A project has: id (integer, assigned by the server), name (string, required, 1 to 200 characters) and description (string or null, optional)."
+  - "A task has: id (integer, assigned by the server), project_id (integer), title (string, required, 1 to 200 characters), description (string or null, optional), status (one of todo, in_progress, done; defaults to todo) and due_date (date as YYYY-MM-DD, or null; optional)."
+  - "Every response body is JSON. Optional fields that were not set are returned as null."
+  - "POST /projects creates a project and returns 201 with the project. GET /projects lists projects. GET /projects/{project_id} returns 200 with one project. PATCH /projects/{project_id} updates only the fields given and returns 200 with the updated project. DELETE /projects/{project_id} deletes the project and all its tasks and returns 204 with an empty body."
+  - "POST /projects/{project_id}/tasks creates a task in that project and returns 201 with the task. GET /projects/{project_id}/tasks lists that project's tasks. GET, PATCH and DELETE /projects/{project_id}/tasks/{task_id} behave like their project counterparts (200, 200, 204)."
+  - "List endpoints return 200 with {\"items\": [...], \"page\": <int>, \"per_page\": <int>, \"total\": <int>}, where total counts all matching records across pages. Items are ordered by id, ascending."
+  - "List endpoints accept the query parameters page (integer, at least 1, default 1) and per_page (integer, 1 to 100, default 20). A page past the end returns an empty items list."
+  - "GET /projects/{project_id}/tasks also accepts status (todo, in_progress or done) and then returns only tasks with that status; total counts only those."
+  - "Invalid input returns 422 with {\"errors\": {\"<field>\": [\"<message>\", ...], ...}}, naming every invalid field. This covers missing required fields, wrong types, empty or too long strings, an unknown status, a malformed due_date and out-of-range page, per_page or status query parameters."
+  - "A project or task that does not exist returns 404 with a JSON object body. A task id that exists but belongs to a different project also returns 404."
 
 technical_requirements:
-  - Use the framework's idiomatic project layout and ORM/migrations.
-  - Read database settings from environment variables.
-  - The server listens on 0.0.0.0:8000.
-  - Include a README section explaining how to start the server.
+  - "Use the framework's idiomatic project layout and its ORM and migrations."
+  - "Read database settings from the environment variables described below; do not hard-code them."
+  - "Provide an executable start.sh in the project root. Run from the project root with sh start.sh, it must apply pending migrations and then serve the API in the foreground on 0.0.0.0:8000. It must work offline: install dependencies while you work, not in start.sh."
+  - "Data must survive a restart of the server; the database may already contain records from earlier runs."
+  - "Include a README section explaining how to start the server."
 
 initial_state:
   mode: build_from_scratch
@@ -25,7 +33,7 @@ initial_state:
 prompt_template: |
   You are implementing "$task_name" using $framework $framework_version on
   $language $language_version. The project lives in the current directory
-  (mounted at $workdir in the runtime container).
+  ($workdir), which is empty apart from a git repository.
 
   $description
 
@@ -35,6 +43,11 @@ prompt_template: |
   Technical requirements:
   $technical_requirements
 
+  Environment:
+  $environment_notes
+
+  When you are done, the API will be started with `sh start.sh` and checked by
+  an automated HTTP test suite against exactly the requirements above.
   Work autonomously until the implementation is complete. Do not ask questions.
 
 supported_stacks: [fastapi, laravel, express]
