@@ -3,7 +3,7 @@
 # so every stack is judged by the same tests. Change both together and bump `version`.
 id: task-management-api
 name: Task Management REST API
-version: "1"
+version: "2"
 description: >
   Build a JSON REST API for managing projects and the tasks inside them,
   persisted in the provided relational database.

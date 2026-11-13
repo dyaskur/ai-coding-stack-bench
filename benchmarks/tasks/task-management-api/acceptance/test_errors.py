@@ -107,7 +107,10 @@ def test_missing_resources_return_404(
     client: httpx.Client, project: Json, method: str, path: str
 ) -> None:
     url = path.format(missing=MISSING, pid=project["id"])
-    payload = {"name": "x", "title": "x"} if method in ("POST", "PATCH") else None
+    # Send a body that would be valid for the endpoint, so only the missing id can fail.
+    payload: Json | None = None
+    if method in ("POST", "PATCH"):
+        payload = {"name": "x"} if path == "/projects/{missing}" else {"title": "x"}
     resp = client.request(method, url, json=payload)
     assert resp.status_code == 404, f"{method} {url} -> {resp.status_code}: {resp.text[:200]}"
     assert isinstance(body(resp), dict)

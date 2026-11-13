@@ -65,8 +65,10 @@ def test_pagination_combined_with_status_filter(
     client: httpx.Client, project: Json, make_task: Callable[..., Json]
 ) -> None:
     pid = project["id"]
-    todo = sorted(make_task(pid, status="todo")["id"] for _ in range(3))
+    # Interleave statuses so paginating before filtering would return the wrong page.
+    todo = [make_task(pid, status="todo")["id"]]
     make_task(pid, status="done")
+    todo += [make_task(pid, status="todo")["id"] for _ in range(2)]
     data = expect(
         client.get(f"/projects/{pid}/tasks", params={"status": "todo", "page": 2, "per_page": 2}),
         200,
