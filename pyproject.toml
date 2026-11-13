@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-benchmark"
+version = "0.1.0"
+description = "Open-source platform for benchmarking AI coding agents across languages and frameworks."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+  "typer>=0.12",
+  "pydantic>=2.6",
+  "pydantic-settings>=2.2",
+  "pyyaml>=6.0",
+  "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.4", "mypy>=1.10", "types-PyYAML"]
+
+[project.scripts]
+benchmark = "ai_benchmark.cli.app:main"
+
+# Third-party agent adapters register themselves here, so the core never
+# needs to change when a new agent is added:
+#
+# [project.entry-points."ai_benchmark.agents"]
+# my-agent = "my_package.adapter:MyAgentAdapter"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_benchmark"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# Typer resolves annotations at runtime; keep Optional[...] for clarity there.
+"src/ai_benchmark/cli/*" = ["UP007", "UP045"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+plugins = ["pydantic.mypy"]
+mypy_path = "src"
