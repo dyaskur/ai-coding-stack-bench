@@ -18,7 +18,7 @@ pip install -e '.[dev]'
 benchmark --help
 ```
 
-Requires Python 3.10+. Docker will be required once execution lands in Phase 2.
+Requires Python 3.10+ and Docker (the `docker` CLI talking to a local daemon) to run trials.
 To run on a server, follow [docs/vps-setup.md](docs/vps-setup.md).
 
 Agents run inside each stack's container and authenticate with either a
@@ -51,14 +51,14 @@ src/ai_benchmark/
   config/         Pydantic schemas: tasks, stacks, experiments, platform settings; YAML/JSON loader
   models/         Enums, metric schemas (with explicit availability), result records
   agents/         AgentAdapter interface + registry (entry-point group `ai_benchmark.agents`)
-  environment/    ExecutionEnvironment interface, Docker skeleton, per-trial workspaces
-  orchestrator/   Experiment planning (randomized, seeded), timing, orchestrator skeleton
+  environment/    ExecutionEnvironment interface, Docker implementation, per-trial workspaces
+  orchestrator/   Planning (randomized, seeded), trial execution, git metrics, JUnit parsing
   storage/        ResultStore interface + atomic JSON file store
 benchmarks/
   tasks/<id>/task.yaml   Benchmark task definitions
   stacks/<id>.yaml       Stack (language + framework + services) definitions
 examples/experiment.yaml Example experiment matrix
-tests/                   Unit tests (pytest)
+tests/                   Unit tests (pytest); tests/integration needs Docker
 ```
 
 ## Extending
@@ -74,4 +74,7 @@ tests/                   Unit tests (pytest)
 pytest
 ruff check src tests
 mypy src
+BENCHMARK_DOCKER_TESTS=1 pytest tests/integration   # one real trial in Docker
 ```
+
+How a trial runs, step by step: [docs/trial-execution.md](docs/trial-execution.md).

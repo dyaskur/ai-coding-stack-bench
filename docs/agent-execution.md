@@ -1,7 +1,7 @@
 # Agent execution and authentication
 
-Decided before Phase 2. This describes the interfaces that exist now; Phase 2
-implements them.
+Decided before Phase 2. The Docker side is implemented (see
+[trial-execution.md](trial-execution.md)); concrete agent adapters come next.
 
 ## Where the agent runs: inside the stack container
 
@@ -20,8 +20,10 @@ Each trial runs in one container built from:
   given (`ExecutionEnvironment.exec` under the hood).
 - Services (Postgres, MySQL, ...) run as sidecars on a per-trial network.
 - The container needs outbound HTTPS so the agent can reach its provider.
-- After the agent finishes, the acceptance suite is copied in and run in the
-  same container, then everything is destroyed.
+- After the agent finishes, the app container is restarted, the app is started
+  with the task's start command, and the acceptance suite runs from a separate
+  tester container over HTTP. The agent never sees the suite. Then everything
+  is destroyed. Details in [trial-execution.md](trial-execution.md).
 
 Interfaces: `AgentAdapter.image_layer()`, `ExecutionEnvironment.prepare_agent_image()`,
 `ExecutionEnvironment.create(..., auth=...)`, `CommandRunner`, `ContainerCommandRunner`.
