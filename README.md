@@ -4,11 +4,10 @@ An open-source platform that measures and compares how productive AI coding
 agents (Codex CLI, Claude Code, OpenCode, and more) are across programming
 languages and frameworks.
 
-> **Status: Phase 1 (foundation).** The configuration schemas, agent adapter
-> interface, Docker environment and orchestrator skeletons, result storage and
-> CLI skeleton are in place. Nothing executes agents yet. See
-> [ARCHITECTURE.md](ARCHITECTURE.md) for the full vision and
-> [docs/phase-1.md](docs/phase-1.md) for what exists and what comes next.
+> **Status: Phase 2 (execution).** Trials run in Docker end to end with the
+> built-in Claude Code, Codex CLI and OpenCode adapters
+> ([docs/agents.md](docs/agents.md)). Reports and the dashboard come in later
+> phases. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full vision.
 
 ## Install (development)
 
@@ -50,7 +49,7 @@ src/ai_benchmark/
   cli/            Typer entry point (`benchmark`)
   config/         Pydantic schemas: tasks, stacks, experiments, platform settings; YAML/JSON loader
   models/         Enums, metric schemas (with explicit availability), result records
-  agents/         AgentAdapter interface + registry (entry-point group `ai_benchmark.agents`)
+  agents/         AgentAdapter interface, registry, built-in claude/codex/opencode adapters
   environment/    ExecutionEnvironment interface, Docker implementation, per-trial workspaces
   orchestrator/   Planning (randomized, seeded), trial execution, git metrics, JUnit parsing
   storage/        ResultStore interface + atomic JSON file store
