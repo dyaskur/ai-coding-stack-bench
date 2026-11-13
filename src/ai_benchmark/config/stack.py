@@ -70,6 +70,12 @@ class StackSpec(StrictModel):
     )
 
     workdir: str = "/workspace"
+    environment_notes: str = Field(
+        default="",
+        description="Facts about the runtime the agent needs, such as which database is "
+        "reachable where and which env vars hold its settings. Shown in the prompt as "
+        "$environment_notes; keep the wording equivalent across stacks.",
+    )
     env: dict[str, str] = Field(default_factory=dict)
     setup_commands: list[list[str]] = Field(
         default_factory=list, description="Run inside the container before the agent starts."
