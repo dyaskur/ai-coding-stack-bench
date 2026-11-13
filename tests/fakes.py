@@ -141,6 +141,7 @@ class FakeEnvironment(ExecutionEnvironment):
         fail_on: str | None = None,
     ) -> None:
         self.junit = junit
+        self.tester_timeout = False
         self.agent_stderr = agent_stderr
         self.agent_exit = agent_exit
         self.fail_on = fail_on
@@ -243,13 +244,20 @@ class FakeEnvironment(ExecutionEnvironment):
         results = next(m.source for m in mounts if m.target == "/results")
         if self.junit is not None:
             (results / "junit.xml").write_text(self.junit)
-        return CommandResult(command=list(command), exit_code=0, duration_seconds=0.1)
+        return CommandResult(
+            command=list(command),
+            exit_code=None if self.tester_timeout else 0,
+            timed_out=self.tester_timeout,
+            duration_seconds=0.1,
+        )
 
     def copy_into(self, handle: EnvironmentHandle, source: Path, destination: str) -> None:
         self.calls.append(("copy_into", destination))
 
     def collect_logs(self, handle: EnvironmentHandle, destination: Path) -> dict[str, Path]:
+        self._maybe_fail("collect_logs")
         return {}
 
     def destroy(self, handle: EnvironmentHandle) -> None:
         self.destroyed.append(handle.trial_id)
+        self._maybe_fail("destroy")

@@ -149,3 +149,12 @@ def test_shipped_task_has_its_acceptance_suite(settings: PlatformSettings) -> No
     suite = task.source_dir / task.acceptance_tests.suite
     assert (suite / "Dockerfile").is_file()
     assert len(list(suite.glob("test_*.py"))) >= 4
+
+
+@pytest.mark.parametrize("image", ["tester", "tester:latest"])
+def test_tester_image_must_be_pinned(image: str) -> None:
+    from ai_benchmark.config.task import AcceptanceTests
+
+    with pytest.raises(ValueError, match="must be pinned"):
+        AcceptanceTests(image=image)
+    assert AcceptanceTests(image="tester:1.2").image == "tester:1.2"

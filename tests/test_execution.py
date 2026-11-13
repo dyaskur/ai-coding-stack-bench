@@ -166,3 +166,40 @@ def test_api_key_mode_keeps_cost(env_settings: PlatformSettings, monkeypatch: An
     o.run(experiment(agents=[AgentSelection(agent="costly")], auth_mode=AuthMode.API_KEY))
     [r] = list(o.store.iter_trials())
     assert r.metrics.usage.cost.value == 0.42
+
+
+def test_tester_timeout_never_passes(env_settings: PlatformSettings) -> None:
+    env = FakeEnvironment()  # writes an all-pass report...
+    env.tester_timeout = True  # ...but the tester then times out
+    o = build(env_settings, env)
+    o.run(experiment(), run_id="r-tester-timeout")
+    [r] = list(o.store.iter_trials(ResultFilter(run_id="r-tester-timeout")))
+    assert r.status is TrialStatus.FAILED
+    assert r.metrics.quality.tests_passed.value == 2  # counts are kept
+    assert r.error and "tester did not finish" in r.error
+
+
+def test_stale_report_is_not_reused(env_settings: PlatformSettings) -> None:
+    o = build(env_settings, FakeEnvironment())
+    o.run(experiment(), run_id="r-stale")
+    [first] = list(o.store.iter_trials(ResultFilter(run_id="r-stale")))
+    assert first.status is TrialStatus.PASSED
+    # Same run id and trial again, but this time the tester writes nothing.
+    o2 = build(env_settings, FakeEnvironment(junit=None))
+    o2.run(experiment(), run_id="r-stale")
+    [again] = list(o2.store.iter_trials(ResultFilter(run_id="r-stale")))
+    assert again.status is TrialStatus.FAILED
+    assert not again.metrics.quality.tests_passed.is_available
+
+
+@pytest.mark.parametrize("step", ["collect_logs", "destroy"])
+def test_cleanup_failure_is_recorded_and_run_continues(
+    env_settings: PlatformSettings, step: str
+) -> None:
+    env = FakeEnvironment(fail_on=step)
+    o = build(env_settings, env)
+    summary = o.run(experiment(trials=2), run_id=f"r-cleanup-{step}")
+    results = list(o.store.iter_trials(ResultFilter(run_id=f"r-cleanup-{step}")))
+    assert len(results) == 2 and summary.by_status == {"infra_error": 2}
+    assert all(r.error and "failed" in r.error for r in results)
+    assert len(env.destroyed) == 2  # destroy is still attempted after collect_logs fails
