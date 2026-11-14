@@ -502,13 +502,16 @@ def report(
     model: Annotated[Optional[str], typer.Option()] = None,
     stack: Annotated[Optional[str], typer.Option()] = None,
     task: Annotated[Optional[str], typer.Option()] = None,
+    mode: Annotated[Optional[ToolingMode], typer.Option("--mode")] = None,
+    auth: Annotated[Optional[AuthMode], typer.Option("--auth")] = None,
     min_trials: Annotated[int, typer.Option("--min-trials", min=1)] = 3,
 ) -> None:
     """Write an aggregate comparison report to stdout."""
     store = JsonResultStore(_ctx(ctx).settings.results_dir)
     try:
         trials = list(store.iter_trials(ResultFilter(
-            run_id=run_id, agent=agent, model=model, stack=stack, task=task
+            run_id=run_id, agent=agent, model=model, stack=stack, task=task,
+            tooling_mode=mode, auth_mode=auth,
         )))
         rows = compare_trials(trials, by, min_trials)
         if not rows:

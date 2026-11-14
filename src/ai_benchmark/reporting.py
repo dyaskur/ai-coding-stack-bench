@@ -57,7 +57,19 @@ def csv_text(rows: list[dict]) -> str:
     stream = io.StringIO()
     writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
     writer.writeheader()
-    writer.writerows(rows)
+    writer.writerows(
+        {
+            key: "'" + value
+            if isinstance(value, str)
+            and (
+                value.startswith(("\t", "\r", "\n"))
+                or value.lstrip(" \t\r\n").startswith(("=", "+", "-", "@"))
+            )
+            else value
+            for key, value in row.items()
+        }
+        for row in rows
+    )
     return stream.getvalue()
 
 
@@ -66,7 +78,7 @@ def export_trials(trials: list[TrialResult], fmt: str) -> str:
     if fmt == "csv":
         return csv_text(rows)
     if fmt == "jsonl":
-        return "".join(json.dumps(row) + "\n" for row in rows)
+        return "".join(json.dumps(row, allow_nan=False) + "\n" for row in rows)
     raise ValueError("format must be csv or jsonl")
 
 
@@ -77,7 +89,9 @@ def _markdown_label(value: str) -> str:
 def render_report(rows: list[ComparisonRow], dimension: str, fmt: str) -> str:
     data = [asdict(row) for row in rows]
     if fmt == "json":
-        return json.dumps({"compare_by": dimension, "groups": data}, indent=2) + "\n"
+        return json.dumps(
+            {"compare_by": dimension, "groups": data}, indent=2, allow_nan=False
+        ) + "\n"
     if fmt == "csv":
         return csv_text(data)
     if fmt != "markdown":
