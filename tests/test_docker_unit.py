@@ -207,8 +207,9 @@ def test_build_streams_to_log_and_reports_failure(monkeypatch: Any, tmp_path: Pa
     with pytest.raises(ExecutionEnvironmentError, match="npm error network") as err:
         e.prepare_agent_image(stack_image, LAYER)
     assert "full log: " in str(err.value)
-    logs = list((tmp_path / "ai-benchmark-builds").glob("*.log"))
+    logs = list(tmp_path.glob("ai-benchmark-builds-*/*.log"))
     assert len(logs) == 1 and "npm error network" in logs[0].read_text()
+    assert logs[0].parent.stat().st_mode & 0o077 == 0
 
 
 def test_build_timeout_is_an_infra_error(monkeypatch: Any, tmp_path: Path) -> None:

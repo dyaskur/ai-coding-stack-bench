@@ -253,7 +253,6 @@ class DockerExecutionEnvironment(ExecutionEnvironment):
         # Builds can take minutes (toolchains, agent CLIs), so stream the output
         # to a log file, report the current step while it runs, and bound it.
         build_log = _build_log_path(tag)
-        build_log.parent.mkdir(parents=True, exist_ok=True)
         limit = self.settings.build_timeout_seconds
         log.info("building image %s (limit %ds), log: %s", tag, limit, build_log)
         args = ["build", "-t", tag, *self._label_args(), "-f", "-", str(context)]
@@ -673,4 +672,4 @@ def _tail(path: Path) -> str:
 
 def _build_log_path(tag: str) -> Path:
     safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in tag)
-    return Path(tempfile.gettempdir()) / "ai-benchmark-builds" / f"{safe}.log"
+    return Path(tempfile.mkdtemp(prefix="ai-benchmark-builds-")) / f"{safe}.log"

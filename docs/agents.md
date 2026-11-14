@@ -17,7 +17,8 @@ official docs and against the pinned CLI itself (`--help` and its output) on
 | Updates off | `DISABLE_AUTOUPDATER`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | pinned install | `OPENCODE_DISABLE_AUTOUPDATE` |
 
 Permission prompts are turned off in every CLI: the trial container is the
-sandbox, the agent runs as a non-root user, and nothing else is reachable.
+execution boundary and the agent runs as a non-root user. It shares a per-trial
+network with its services and can make outbound HTTPS requests.
 
 ## What each agent reports
 
