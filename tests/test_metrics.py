@@ -29,6 +29,12 @@ def test_unavailable_cannot_carry_value() -> None:
         Metric[int](value=5, availability=MetricAvailability.UNAVAILABLE)
 
 
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_available_float_must_be_finite(value: float) -> None:
+    with pytest.raises(ValidationError, match="finite"):
+        Metric[float].of(value, MetricSource.MEASURED)
+
+
 def test_round_trip_json() -> None:
     m = TrialMetrics()
     m.usage.tokens.output_tokens = Metric[int].of(42, MetricSource.AGENT_REPORTED, unit="tokens")

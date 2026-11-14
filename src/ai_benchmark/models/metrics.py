@@ -8,6 +8,7 @@ silently.
 
 from __future__ import annotations
 
+import math
 from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -33,6 +34,8 @@ class Metric(BaseModel, Generic[T]):
         if self.availability is MetricAvailability.AVAILABLE:
             if self.value is None:
                 raise ValueError("an AVAILABLE metric must have a value")
+            if isinstance(self.value, float) and not math.isfinite(self.value):
+                raise ValueError("an AVAILABLE metric must be finite")
             if self.source is None:
                 raise ValueError("an AVAILABLE metric must declare its source")
         elif self.value is not None:
