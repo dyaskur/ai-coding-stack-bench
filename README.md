@@ -37,7 +37,9 @@ benchmark run --agents codex,claude:<model> --task task-management-api \
 benchmark run --config examples/experiment.yaml --dry-run
 benchmark results [--agent X --stack Y --mode standard --not-rate-limited ...]
 benchmark compare --run RUN_ID --by stack [--agent codex --model gpt-6-luna]
-benchmark report                     # Phase 3
+benchmark export --run RUN_ID --format csv > trials.csv
+benchmark export --run RUN_ID --format jsonl > trials.jsonl
+benchmark report --run RUN_ID --by stack > report.md
 ```
 
 Platform settings come from `BENCHMARK_*` environment variables (nested with

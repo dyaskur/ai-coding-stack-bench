@@ -18,6 +18,7 @@ class ComparisonRow:
     timed: int
     mean_seconds: float | None
     stdev_seconds: float | None
+    mean_cost_usd: float | None
     low_confidence: bool
 
 
@@ -56,6 +57,13 @@ def compare_trials(
             and not trial.rate_limited
             and trial.metrics.performance.agent_execution_seconds.is_available
         ]
+        costs = [
+            trial.metrics.usage.cost.value
+            for trial in group
+            if trial.status is TrialStatus.PASSED
+            and not trial.rate_limited
+            and trial.metrics.usage.cost.is_available
+        ]
         rows.append(
             ComparisonRow(
                 value=value,
@@ -65,6 +73,7 @@ def compare_trials(
                 timed=len(times),
                 mean_seconds=mean(times) if times else None,
                 stdev_seconds=stdev(times) if len(times) > 1 else None,
+                mean_cost_usd=mean(costs) if costs else None,
                 low_confidence=len(group) < min_trials,
             )
         )

@@ -29,6 +29,7 @@ from ai_benchmark.errors import BenchmarkError, ConfigurationError
 from ai_benchmark.logging_config import configure_logging
 from ai_benchmark.models.enums import AuthMode, ComparisonDimension, ToolingMode, TrialStatus
 from ai_benchmark.orchestrator.orchestrator import BenchmarkOrchestrator
+from ai_benchmark.reporting import export_trials, render_report
 from ai_benchmark.storage.base import ResultFilter
 from ai_benchmark.storage.json_store import JsonResultStore
 
@@ -428,7 +429,7 @@ def compare(
         return
     table = Table(
         by.value, "passed/trials", "rate limited", "timed", "mean agent time", "std dev",
-        "confidence",
+        "mean cost", "confidence",
     )
     for row in rows:
         table.add_row(
@@ -438,9 +439,31 @@ def compare(
             str(row.timed),
             f"{row.mean_seconds:.1f}s" if row.mean_seconds is not None else "n/a",
             f"{row.stdev_seconds:.1f}s" if row.stdev_seconds is not None else "n/a",
+            f"${row.mean_cost_usd:.4f}" if row.mean_cost_usd is not None else "n/a",
             "low" if row.low_confidence else "ok",
         )
     console.print(table)
+
+
+@app.command()
+def export(
+    ctx: typer.Context,
+    run_id: Annotated[Optional[str], typer.Option("--run")] = None,
+    fmt: Annotated[str, typer.Option("--format", help="csv or jsonl.")] = "csv",
+    agent: Annotated[Optional[str], typer.Option()] = None,
+    model: Annotated[Optional[str], typer.Option()] = None,
+    stack: Annotated[Optional[str], typer.Option()] = None,
+    task: Annotated[Optional[str], typer.Option()] = None,
+) -> None:
+    """Write flat per-trial results to stdout."""
+    store = JsonResultStore(_ctx(ctx).settings.results_dir)
+    try:
+        trials = list(store.iter_trials(ResultFilter(
+            run_id=run_id, agent=agent, model=model, stack=stack, task=task
+        )))
+        typer.echo(export_trials(trials, fmt), nl=False)
+    except (BenchmarkError, ValueError) as exc:
+        raise _fail(str(exc)) from None
 
 
 @app.command()
@@ -448,9 +471,25 @@ def report(
     ctx: typer.Context,
     run_id: Annotated[Optional[str], typer.Option("--run")] = None,
     fmt: Annotated[str, typer.Option("--format", help="markdown, json or csv.")] = "markdown",
+    by: Annotated[ComparisonDimension, typer.Option("--by")] = ComparisonDimension.STACK,
+    agent: Annotated[Optional[str], typer.Option()] = None,
+    model: Annotated[Optional[str], typer.Option()] = None,
+    stack: Annotated[Optional[str], typer.Option()] = None,
+    task: Annotated[Optional[str], typer.Option()] = None,
+    min_trials: Annotated[int, typer.Option("--min-trials", min=1)] = 3,
 ) -> None:
-    """Generate an aggregated report (Phase 3)."""
-    raise _fail("reporting is not implemented yet (planned for Phase 3)", 3)
+    """Write an aggregate comparison report to stdout."""
+    store = JsonResultStore(_ctx(ctx).settings.results_dir)
+    try:
+        trials = list(store.iter_trials(ResultFilter(
+            run_id=run_id, agent=agent, model=model, stack=stack, task=task
+        )))
+        rows = compare_trials(trials, by, min_trials)
+        if not rows:
+            raise ValueError("no results match")
+        typer.echo(render_report(rows, by.value, fmt), nl=False)
+    except (BenchmarkError, ValueError) as exc:
+        raise _fail(str(exc)) from None
 
 
 def main() -> None:

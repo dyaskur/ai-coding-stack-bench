@@ -17,6 +17,7 @@ def test_compare_ranks_passing_times_and_counts_limit_hits() -> None:
         item.metrics.performance.agent_execution_seconds = Metric[float].of(
             seconds, MetricSource.MEASURED
         )
+        item.metrics.usage.cost = Metric[float].of(0.02, MetricSource.AGENT_REPORTED)
     slow = trial("r1", "s1", "codex", TrialStatus.PASSED, limited=True)
     slow.environment.stack = "laravel"
     slow.metrics.performance.agent_execution_seconds = Metric[float].of(1.0, MetricSource.MEASURED)
@@ -32,6 +33,7 @@ def test_compare_ranks_passing_times_and_counts_limit_hits() -> None:
         1, 1, 0, None
     )
     assert rows[1].low_confidence and not rows[0].low_confidence
+    assert rows[0].mean_cost_usd == 0.02 and rows[1].mean_cost_usd is None
 
 
 def test_compare_rejects_mixed_task_versions() -> None:
