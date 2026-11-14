@@ -36,6 +36,7 @@ benchmark run --agents codex,claude:<model> --task task-management-api \
               --stacks fastapi,laravel --trials 5 --auth subscription --dry-run
 benchmark run --config examples/experiment.yaml --dry-run
 benchmark results [--agent X --stack Y --mode standard --not-rate-limited ...]
+benchmark compare --run RUN_ID --by stack [--agent codex --model gpt-6-luna]
 benchmark report                     # Phase 3
 ```
 

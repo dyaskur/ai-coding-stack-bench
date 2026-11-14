@@ -13,6 +13,7 @@ from rich.table import Column, Table
 
 from ai_benchmark import __version__
 from ai_benchmark.agents.registry import AgentRegistry, default_registry
+from ai_benchmark.comparison import compare_trials
 from ai_benchmark.config.experiment import AgentSelection, ExperimentConfig, ToolingConfig
 from ai_benchmark.config.loader import (
     SpecCatalog,
@@ -26,7 +27,7 @@ from ai_benchmark.config.settings import PlatformSettings
 from ai_benchmark.environment.docker import DockerExecutionEnvironment
 from ai_benchmark.errors import BenchmarkError, ConfigurationError
 from ai_benchmark.logging_config import configure_logging
-from ai_benchmark.models.enums import AuthMode, ToolingMode, TrialStatus
+from ai_benchmark.models.enums import AuthMode, ComparisonDimension, ToolingMode, TrialStatus
 from ai_benchmark.orchestrator.orchestrator import BenchmarkOrchestrator
 from ai_benchmark.storage.base import ResultFilter
 from ai_benchmark.storage.json_store import JsonResultStore
@@ -393,6 +394,51 @@ def results(
             r.agent.auth_mode.value,
             r.status.value + (" (rate limited)" if r.rate_limited else ""),
             f"{secs.value:.1f}s" if secs.value is not None else "n/a",
+        )
+    console.print(table)
+
+
+@app.command()
+def compare(
+    ctx: typer.Context,
+    by: Annotated[
+        ComparisonDimension, typer.Option("--by", help="Dimension to compare.")
+    ] = ComparisonDimension.STACK,
+    run_id: Annotated[Optional[str], typer.Option("--run")] = None,
+    agent: Annotated[Optional[str], typer.Option()] = None,
+    model: Annotated[Optional[str], typer.Option()] = None,
+    stack: Annotated[Optional[str], typer.Option()] = None,
+    task: Annotated[Optional[str], typer.Option()] = None,
+    mode: Annotated[Optional[ToolingMode], typer.Option("--mode")] = None,
+    auth: Annotated[Optional[AuthMode], typer.Option("--auth")] = None,
+    min_trials: Annotated[int, typer.Option("--min-trials", min=1)] = 3,
+) -> None:
+    """Compare success rates and passing agent times from stored trials."""
+    store = JsonResultStore(_ctx(ctx).settings.results_dir)
+    filters = ResultFilter(
+        run_id=run_id, agent=agent, model=model, stack=stack, task=task,
+        tooling_mode=mode, auth_mode=auth,
+    )
+    try:
+        rows = compare_trials(list(store.iter_trials(filters)), by, min_trials)
+    except (BenchmarkError, ValueError) as exc:
+        raise _fail(str(exc)) from None
+    if not rows:
+        console.print("No results match.")
+        return
+    table = Table(
+        by.value, "passed/trials", "rate limited", "timed", "mean agent time", "std dev",
+        "confidence",
+    )
+    for row in rows:
+        table.add_row(
+            row.value,
+            f"{row.passed}/{row.trials}",
+            str(row.rate_limited),
+            str(row.timed),
+            f"{row.mean_seconds:.1f}s" if row.mean_seconds is not None else "n/a",
+            f"{row.stdev_seconds:.1f}s" if row.stdev_seconds is not None else "n/a",
+            "low" if row.low_confidence else "ok",
         )
     console.print(table)
 
