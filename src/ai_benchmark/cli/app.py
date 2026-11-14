@@ -427,10 +427,7 @@ def compare(
     if not rows:
         console.print("No results match.")
         return
-    table = Table(
-        by.value, "passed/trials", "rate limited", "timed", "mean agent time", "std dev",
-        "mean cost", "confidence",
-    )
+    table = Table(by.value, "pass", "limits", "timed", "mean", "sd", "cost", "cost n", "conf")
     for row in rows:
         table.add_row(
             row.value,
@@ -440,6 +437,7 @@ def compare(
             f"{row.mean_seconds:.1f}s" if row.mean_seconds is not None else "n/a",
             f"{row.stdev_seconds:.1f}s" if row.stdev_seconds is not None else "n/a",
             f"${row.mean_cost_usd:.4f}" if row.mean_cost_usd is not None else "n/a",
+            str(row.cost_samples),
             "low" if row.low_confidence else "ok",
         )
     console.print(table)

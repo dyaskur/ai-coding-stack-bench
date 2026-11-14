@@ -6,8 +6,9 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from ai_benchmark.cli.app import app
-from ai_benchmark.models import Metric, MetricSource, TrialStatus
-from ai_benchmark.reporting import export_trials
+from ai_benchmark.comparison import compare_trials
+from ai_benchmark.models import ComparisonDimension, Metric, MetricSource, TrialStatus
+from ai_benchmark.reporting import export_trials, render_report
 from ai_benchmark.storage import JsonResultStore
 
 from .test_storage import manifest, trial
@@ -57,3 +58,12 @@ def test_report_rejects_mixed_task_versions(tmp_path: Path) -> None:
     store.save_trial(b)
     result = CliRunner().invoke(app, ["--results-dir", str(tmp_path), "report", "--run", "r1"])
     assert result.exit_code == 1 and "task/version" in result.output
+
+
+def test_markdown_report_escapes_group_label() -> None:
+    item = trial("r1", "t1", "codex", TrialStatus.PASSED)
+    item.environment.stack = "bad|stack\nnext"
+    rows = compare_trials([item], ComparisonDimension.STACK)
+    report = render_report(rows, "stack", "markdown")
+    assert "bad&#124;stack next" in report
+    assert "| bad|stack" not in report

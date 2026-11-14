@@ -34,6 +34,7 @@ def test_compare_ranks_passing_times_and_counts_limit_hits() -> None:
     )
     assert rows[1].low_confidence and not rows[0].low_confidence
     assert rows[0].mean_cost_usd == 0.02 and rows[1].mean_cost_usd is None
+    assert (rows[0].cost_samples, rows[1].cost_samples) == (3, 0)
 
 
 def test_compare_rejects_mixed_task_versions() -> None:

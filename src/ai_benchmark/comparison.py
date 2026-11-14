@@ -19,6 +19,7 @@ class ComparisonRow:
     mean_seconds: float | None
     stdev_seconds: float | None
     mean_cost_usd: float | None
+    cost_samples: int
     low_confidence: bool
 
 
@@ -74,6 +75,7 @@ def compare_trials(
                 mean_seconds=mean(times) if times else None,
                 stdev_seconds=stdev(times) if len(times) > 1 else None,
                 mean_cost_usd=mean(costs) if costs else None,
+                cost_samples=len(costs),
                 low_confidence=len(group) < min_trials,
             )
         )

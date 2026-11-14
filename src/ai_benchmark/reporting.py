@@ -6,6 +6,7 @@ import csv
 import io
 import json
 from dataclasses import asdict
+from html import escape
 
 from ai_benchmark.comparison import ComparisonRow
 from ai_benchmark.models.results import TrialResult
@@ -69,6 +70,10 @@ def export_trials(trials: list[TrialResult], fmt: str) -> str:
     raise ValueError("format must be csv or jsonl")
 
 
+def _markdown_label(value: str) -> str:
+    return escape(value).replace("|", "&#124;").replace("\n", " ").replace("\r", " ")
+
+
 def render_report(rows: list[ComparisonRow], dimension: str, fmt: str) -> str:
     data = [asdict(row) for row in rows]
     if fmt == "json":
@@ -81,24 +86,27 @@ def render_report(rows: list[ComparisonRow], dimension: str, fmt: str) -> str:
         f"# Benchmark comparison by {dimension}",
         "",
         "| Group | Passed/trials | Rate limited | Timed | Mean time (s) | "
-        "Std dev (s) | Mean cost (USD) | Confidence |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+        "Std dev (s) | Mean cost (USD) | Cost samples | Confidence |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
     ]
     for row in rows:
+        label = _markdown_label(row.value)
         mean = f"{row.mean_seconds:.2f}" if row.mean_seconds is not None else "n/a"
         dev = f"{row.stdev_seconds:.2f}" if row.stdev_seconds is not None else "n/a"
         cost = f"{row.mean_cost_usd:.4f}" if row.mean_cost_usd is not None else "n/a"
         lines.append(
-            f"| {row.value} | {row.passed}/{row.trials} | {row.rate_limited} | "
-            f"{row.timed} | {mean} | {dev} | {cost} | "
+            f"| {label} | "
+            f"{row.passed}/{row.trials} | {row.rate_limited} | "
+            f"{row.timed} | {mean} | {dev} | {cost} | {row.cost_samples} | "
             f"{'low' if row.low_confidence else 'ok'} |"
         )
-    lines.extend(["", "## Success rate", "", "```text"])
+    lines.extend(["", "## Success rate", "", "| Group | Success |", "| --- | --- |"])
     for row in rows:
         rate = row.passed / row.trials if row.trials else 0
-        lines.append(f"{row.value:<20} {'█' * round(rate * 20):<20} {rate:.0%}")
+        label = _markdown_label(row.value)
+        lines.append(f"| {label} | {'█' * round(rate * 20)} {rate:.0%} |")
     lines.extend([
-        "```", "",
+        "",
         "Agent time uses passing trials without rate-limit events and an available timer.",
         "Success rate includes all trials. Cost is n/a when unavailable.", "",
     ])
