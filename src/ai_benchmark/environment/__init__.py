@@ -8,6 +8,7 @@ from ai_benchmark.environment.base import (
     EnvironmentHandle,
     ExecutionEnvironment,
     ImageInfo,
+    Mount,
 )
 from ai_benchmark.environment.docker import DockerExecutionEnvironment
 from ai_benchmark.environment.workspace import WorkspaceManager
@@ -21,5 +22,6 @@ __all__ = [
     "EnvironmentHandle",
     "ExecutionEnvironment",
     "ImageInfo",
+    "Mount",
     "WorkspaceManager",
 ]

@@ -6,6 +6,9 @@ framework_version: "4.21"
 description: Node.js 22 with Express, backed by PostgreSQL.
 image: node:22.11.0-bookworm-slim
 workdir: /workspace
+environment_notes: |
+  - PostgreSQL 16 is running at host "postgres", port 5432. Its connection URL is in
+    the DATABASE_URL environment variable (postgresql://user:password@host:port/db).
 env:
   DATABASE_URL: postgresql://bench:bench@postgres:5432/bench
 services:

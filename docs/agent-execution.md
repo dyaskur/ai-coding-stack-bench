@@ -1,7 +1,8 @@
 # Agent execution and authentication
 
-Decided before Phase 2. This describes the interfaces that exist now; Phase 2
-implements them.
+Decided before Phase 2 and now implemented: the Docker side is described in
+[trial-execution.md](trial-execution.md), the built-in adapters in
+[agents.md](agents.md).
 
 ## Where the agent runs: inside the stack container
 
@@ -20,8 +21,10 @@ Each trial runs in one container built from:
   given (`ExecutionEnvironment.exec` under the hood).
 - Services (Postgres, MySQL, ...) run as sidecars on a per-trial network.
 - The container needs outbound HTTPS so the agent can reach its provider.
-- After the agent finishes, the acceptance suite is copied in and run in the
-  same container, then everything is destroyed.
+- After the agent finishes, the app container is restarted, the app is started
+  with the task's start command, and the acceptance suite runs from a separate
+  tester container over HTTP. The agent never sees the suite. Then everything
+  is destroyed. Details in [trial-execution.md](trial-execution.md).
 
 Interfaces: `AgentAdapter.image_layer()`, `ExecutionEnvironment.prepare_agent_image()`,
 `ExecutionEnvironment.create(..., auth=...)`, `CommandRunner`, `ContainerCommandRunner`.
@@ -52,17 +55,25 @@ Config files only ever contain **names** of environment variables and
 anything that doesn't look like a variable name). Values are read from the
 host when the trial container is created.
 
-### Expected defaults per agent
+### Defaults per agent
 
-Each adapter supplies these through `default_auth(mode)`. They will be checked
-against each CLI's current official documentation when the adapters are built
-in Phase 2; you can override any of them per agent in the experiment file.
+Each adapter supplies these through `default_auth(mode)`. They were checked
+against each CLI's official documentation and its pinned version (2026-11-13).
+You can override any of them per agent in the experiment file.
 
 | Agent | Subscription | API key |
 | --- | --- | --- |
-| Claude Code | env `CLAUDE_CODE_OAUTH_TOKEN` (create with `claude setup-token`) | env `ANTHROPIC_API_KEY` |
-| Codex CLI | file `~/.codex/auth.json` (created by `codex login`) | env `OPENAI_API_KEY` (exact variable to confirm) |
-| OpenCode | file `~/.local/share/opencode/auth.json` (created by `opencode auth login`) | provider key env var, depending on the configured provider |
+| Claude Code | env `CLAUDE_CODE_OAUTH_TOKEN` (create with `claude setup-token`; valid one year) | env `ANTHROPIC_API_KEY` |
+| Codex CLI | file `~/.codex/auth.json` (created by `codex login`, ChatGPT plan) | env `CODEX_API_KEY` (read directly by `codex exec`) |
+| OpenCode | file `~/.local/share/opencode/auth.json` (created by `opencode auth login`) | env named by the adapter option `api_key_env`, default `ANTHROPIC_API_KEY` |
+
+Only the variables for the chosen mode are passed into the container. That
+matters for Claude Code, where `ANTHROPIC_API_KEY` would otherwise take
+precedence over a subscription token.
+
+Codex and OpenCode refresh their login tokens. With the default `copy` mode a
+refreshed token is thrown away with the container. If logins start expiring
+between trials, switch that file to `bind_rw`.
 
 Credential files default to `mode: copy` (a fresh copy per trial). If a CLI
 must write refreshed tokens back, use `bind_rw` for that file.

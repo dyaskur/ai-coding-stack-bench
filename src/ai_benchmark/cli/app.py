@@ -28,6 +28,7 @@ from ai_benchmark.environment.docker import DockerExecutionEnvironment
 from ai_benchmark.errors import BenchmarkError, ConfigurationError
 from ai_benchmark.logging_config import configure_logging
 from ai_benchmark.models.enums import AuthMode, ComparisonDimension, ToolingMode, TrialStatus
+from ai_benchmark.models.results import TrialResult
 from ai_benchmark.orchestrator.orchestrator import BenchmarkOrchestrator
 from ai_benchmark.reporting import export_trials, render_report
 from ai_benchmark.storage.base import ResultFilter
@@ -52,12 +53,12 @@ class AppContext:
     def catalog(self) -> SpecCatalog:
         return SpecCatalog(self.settings)
 
-    def orchestrator(self) -> BenchmarkOrchestrator:
+    def orchestrator(self, run_id: str | None = None) -> BenchmarkOrchestrator:
         return BenchmarkOrchestrator(
             settings=self.settings,
             catalog=self.catalog,
             registry=self.registry,
-            environment=DockerExecutionEnvironment(self.settings.docker),
+            environment=DockerExecutionEnvironment(self.settings.docker, run_id=run_id),
             store=JsonResultStore(self.settings.results_dir),
         )
 
@@ -333,10 +334,37 @@ def run(
         return
     if any(i.severity == "error" for i in issues):
         raise _fail("pre-flight checks failed; nothing was executed")
+
+    # Execute exactly the plan shown above: same run id, same seed.
+    exp = exp.model_copy(update={"seed": plan.seed})
+    runner = _ctx(ctx).orchestrator(run_id=plan.run_id)
     try:
-        orchestrator.run(exp)
-    except NotImplementedError as exc:
-        raise _fail(str(exc), 3) from None
+        version = runner.environment.check()
+    except BenchmarkError as exc:
+        raise _fail(str(exc)) from None
+    console.print(f"Docker {version}. Results: {_ctx(ctx).settings.results_dir / plan.run_id}")
+
+    def progress(result: TrialResult) -> None:
+        secs = result.metrics.performance.agent_execution_seconds.value
+        tests = result.metrics.quality
+        detail = f"agent {secs:.0f}s" if secs is not None else "agent n/a"
+        if tests.tests_total.is_available:
+            detail += f", tests {tests.tests_passed.value}/{tests.tests_total.value}"
+        if result.rate_limited:
+            detail += ", rate limited"
+        console.print(
+            f"[{result.execution_order + 1}/{len(plan.trials)}] {result.trial_id} "
+            f"{result.agent.agent_model} @ {result.environment.stack}: "
+            f"[bold]{result.status.value}[/bold] ({detail})"
+            + (f" - {result.error}" if result.error else "")
+        )
+
+    try:
+        summary = runner.run(exp, on_trial_complete=progress, run_id=plan.run_id)
+    except BenchmarkError as exc:
+        raise _fail(str(exc)) from None
+    counts = ", ".join(f"{k} {v}" for k, v in sorted(summary.by_status.items()))
+    console.print(f"Run {summary.run_id} finished: {counts}")
 
 
 @app.command()

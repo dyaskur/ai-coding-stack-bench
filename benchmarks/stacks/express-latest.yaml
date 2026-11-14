@@ -1,0 +1,28 @@
+id: express-latest
+language: javascript
+language_version: "26.13.1"
+framework: express
+framework_version: "5.3.0"
+description: Node.js 26.13.1 and Express 5.3.0, backed by PostgreSQL 18.7.
+image: node:26.13.1-bookworm-slim
+workdir: /workspace
+environment_notes: |
+  - Express 5.3.0 is installed in the starter package.json before you begin.
+  - PostgreSQL 18.7 is running at host "postgres", port 5432. Its connection URL is in
+    the DATABASE_URL environment variable (postgresql://user:password@host:port/db).
+setup_commands:
+  - [sh, -lc, "npm init -y >/dev/null && npm install --no-audit --no-fund --save-exact express@5.3.0"]
+env:
+  DATABASE_URL: postgresql://bench:bench@postgres:5432/bench
+services:
+  - name: postgres
+    image: postgres:18.7-alpine
+    env:
+      POSTGRES_USER: bench
+      POSTGRES_PASSWORD: bench
+      POSTGRES_DB: bench
+    ports: [5432]
+    healthcheck: [pg_isready, -U, bench]
+resources:
+  cpus: 2
+  memory: 4g

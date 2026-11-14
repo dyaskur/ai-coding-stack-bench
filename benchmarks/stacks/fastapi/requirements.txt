@@ -1,0 +1,10 @@
+# Preinstalled in the fastapi stack image. Agents may add packages; these are the baseline.
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.2
+pydantic-settings==2.6.1
+sqlalchemy==2.0.36
+alembic==1.14.0
+psycopg[binary]==3.2.3
+httpx==0.28.0
+pytest==8.3.3

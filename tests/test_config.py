@@ -68,9 +68,12 @@ def test_prompt_rendering(settings: PlatformSettings) -> None:
             framework="fastapi",
             framework_version="0.115",
             workdir="/workspace",
+            environment_notes="- Postgres at host postgres",
         )
     )
-    assert "fastapi 0.115" in prompt and "- CRUD endpoints" in prompt
+    assert "fastapi 0.115" in prompt and "POST /projects creates a project" in prompt
+    assert "Environment:\n- Postgres at host postgres" in prompt
+    assert "sh start.sh" in prompt
     with pytest.raises(KeyError):
         task.render_prompt({})
 
@@ -87,15 +90,14 @@ def test_extend_mode_requires_template(tmp_path: Path) -> None:
         load_task(f)
 
 
-def test_acceptance_command_must_cover_stacks(tmp_path: Path) -> None:
-    f = tmp_path / "task.yaml"
-    f.write_text(
-        "id: t\nname: T\ndescription: d\nfunctional_requirements: [a]\n"
-        "prompt_template: x\nsupported_stacks: [fastapi, laravel]\n"
-        "acceptance_tests: {per_stack: {fastapi: [pytest]}}\n"
-    )
-    with pytest.raises(ConfigurationError, match="laravel"):
-        load_task(f)
+def test_acceptance_defaults_and_stack_source_dir(settings: PlatformSettings) -> None:
+    catalog = SpecCatalog(settings)
+    spec = catalog.get_task("task-management-api").acceptance_tests
+    assert spec.app_start_command == ["sh", "start.sh"] and spec.app_port == 8000
+    assert "--junitxml=/results/junit.xml" in spec.command
+    stack = catalog.get_stack("fastapi")
+    assert stack.source_dir is not None
+    assert stack.resolve(Path("x/Dockerfile")) == stack.source_dir / "x/Dockerfile"
 
 
 def test_agent_selection_parse() -> None:
@@ -126,3 +128,33 @@ def test_settings_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     s = PlatformSettings()
     assert s.results_dir == Path("/tmp/out")
     assert s.docker.default_memory_limit == "8g"
+
+
+def test_shipped_stacks_build_from_files_and_describe_their_environment(
+    settings: PlatformSettings,
+) -> None:
+    catalog = SpecCatalog(settings)
+    for stack_id in ("fastapi", "laravel"):
+        stack = catalog.get_stack(stack_id)
+        assert stack.dockerfile is not None
+        assert stack.resolve(stack.dockerfile).is_file()
+    for stack_id in catalog.get_task("task-management-api").supported_stacks:
+        # Every stack the task runs on must tell the agent where its database is.
+        assert catalog.get_stack(stack_id).environment_notes.strip(), stack_id
+
+
+def test_shipped_task_has_its_acceptance_suite(settings: PlatformSettings) -> None:
+    task = SpecCatalog(settings).get_task("task-management-api")
+    assert task.acceptance_tests.suite is not None and task.source_dir is not None
+    suite = task.source_dir / task.acceptance_tests.suite
+    assert (suite / "Dockerfile").is_file()
+    assert len(list(suite.glob("test_*.py"))) >= 4
+
+
+@pytest.mark.parametrize("image", ["tester", "tester:latest"])
+def test_tester_image_must_be_pinned(image: str) -> None:
+    from ai_benchmark.config.task import AcceptanceTests
+
+    with pytest.raises(ValueError, match="must be pinned"):
+        AcceptanceTests(image=image)
+    assert AcceptanceTests(image="tester:1.2").image == "tester:1.2"

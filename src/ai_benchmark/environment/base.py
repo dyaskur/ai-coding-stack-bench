@@ -48,8 +48,9 @@ class AgentImageLayer(BaseModel):
     )
     requires: list[str] = Field(
         default_factory=list,
-        description="Base tools the commands need (e.g. 'curl', 'nodejs>=20'); "
-        "installed first if the stack image lacks them.",
+        description="What the install commands need. 'node' adds the platform's pinned "
+        "Node.js at /opt/agent-node; anything else is an OS package name. git, curl and "
+        "ca-certificates are always installed.",
     )
     env: dict[str, str] = Field(default_factory=dict)
     home_dir: str = Field(default="/home/agent", description="HOME for the non-root agent user.")
@@ -90,6 +91,14 @@ class CommandResult(BaseModel):
         return self.exit_code == 0 and not self.timed_out
 
 
+class Mount(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    source: Path
+    target: str
+    read_only: bool = True
+
+
 class CommandRunner(Protocol):
     """Runs a command in a trial's container. This is all an agent adapter can execute."""
 
@@ -118,6 +127,10 @@ class ExecutionEnvironment(ABC):
     * ``destroy`` is idempotent and releases every resource, even after failures.
     """
 
+    def check(self) -> str:
+        """Verify the backend is usable before a run; return a version string."""
+        return "ok"
+
     @abstractmethod
     def prepare_image(self, stack: StackSpec) -> ImageInfo:
         """Build or pull the stack's image (honouring the pull policy and cache)."""
@@ -125,6 +138,10 @@ class ExecutionEnvironment(ABC):
     @abstractmethod
     def prepare_agent_image(self, stack_image: ImageInfo, layer: AgentImageLayer) -> ImageInfo:
         """Build (or reuse from cache) the stack image with the agent CLI layer on top."""
+
+    @abstractmethod
+    def build_image(self, name: str, context: Path, dockerfile: Path | None = None) -> ImageInfo:
+        """Build (or reuse) a helper image, e.g. the acceptance tester, tagged by content."""
 
     @abstractmethod
     def create(
@@ -163,6 +180,36 @@ class ExecutionEnvironment(ABC):
         When ``stdout_path``/``stderr_path`` are given, output is streamed to
         those host files (raw logs) as well as returned.
         """
+
+    @abstractmethod
+    def exec_detached(
+        self,
+        handle: EnvironmentHandle,
+        command: Sequence[str],
+        *,
+        env: Mapping[str, str] | None = None,
+        workdir: str | None = None,
+    ) -> None:
+        """Start a long-running command (e.g. the app server) in the stack container."""
+
+    @abstractmethod
+    def restart(self, handle: EnvironmentHandle, timeout_seconds: int) -> None:
+        """Restart the stack container, killing every process in it; files are kept."""
+
+    @abstractmethod
+    def run_job(
+        self,
+        handle: EnvironmentHandle,
+        image: ImageInfo,
+        command: Sequence[str],
+        *,
+        timeout_seconds: int,
+        mounts: Sequence[Mount] = (),
+        env: Mapping[str, str] | None = None,
+        stdout_path: Path | None = None,
+        stderr_path: Path | None = None,
+    ) -> CommandResult:
+        """Run a one-off container on the trial's network (e.g. the acceptance tester)."""
 
     @abstractmethod
     def copy_into(self, handle: EnvironmentHandle, source: Path, destination: str) -> None:

@@ -17,8 +17,15 @@ from ai_benchmark.agents import (
     CommandRunner,
 )
 from ai_benchmark.config import AgentAuthConfig
-from ai_benchmark.environment import CommandResult
-from ai_benchmark.errors import ConfigurationError
+from ai_benchmark.config.stack import StackSpec
+from ai_benchmark.environment import (
+    CommandResult,
+    EnvironmentHandle,
+    ExecutionEnvironment,
+    ImageInfo,
+    Mount,
+)
+from ai_benchmark.errors import ConfigurationError, ExecutionEnvironmentError
 from ai_benchmark.models import AuthMode, Metric, RateLimitEvent, UsageMetrics
 
 FAKE_TOKEN_ENV = "FAKE_AGENT_TOKEN"
@@ -108,3 +115,150 @@ class ScriptedRunner:
         return CommandResult(
             command=list(command), exit_code=code, stdout=out, stderr=err, duration_seconds=0.0
         )
+
+
+JUNIT_ALL_PASS = (
+    '<testsuites><testsuite name="s" tests="2">'
+    '<testcase classname="t" name="a"/><testcase classname="t" name="b"/>'
+    "</testsuite></testsuites>"
+)
+JUNIT_ONE_FAIL = (
+    '<testsuites><testsuite name="s" tests="2">'
+    '<testcase classname="t" name="a"/>'
+    '<testcase classname="t" name="b"><failure message="boom"/></testcase>'
+    "</testsuite></testsuites>"
+)
+
+
+class FakeEnvironment(ExecutionEnvironment):
+    """In-memory ExecutionEnvironment that records calls and scripts command output."""
+
+    def __init__(
+        self,
+        junit: str | None = JUNIT_ALL_PASS,
+        agent_stderr: str = "",
+        agent_exit: int = 0,
+        fail_on: str | None = None,
+    ) -> None:
+        self.junit = junit
+        self.tester_timeout = False
+        self.tester_exit = 0
+        self.agent_stderr = agent_stderr
+        self.agent_exit = agent_exit
+        self.fail_on = fail_on
+        self.calls: list[tuple[str, Any]] = []
+        self.destroyed: list[str] = []
+
+    def _maybe_fail(self, step: str) -> None:
+        self.calls.append((step, None))
+        if self.fail_on == step:
+            raise ExecutionEnvironmentError(f"{step} failed")
+
+    def prepare_image(self, stack: StackSpec) -> ImageInfo:
+        self._maybe_fail("prepare_image")
+        return ImageInfo(stack_id=stack.id, reference=f"{stack.image}", digest="sha256:stack")
+
+    def prepare_agent_image(self, stack_image: ImageInfo, layer: AgentImageLayer) -> ImageInfo:
+        self._maybe_fail("prepare_agent_image")
+        return ImageInfo(stack_id=stack_image.stack_id, reference=f"agent-{layer.tag_suffix}")
+
+    def build_image(self, name: str, context: Path, dockerfile: Path | None = None) -> ImageInfo:
+        self._maybe_fail("build_image")
+        return ImageInfo(stack_id=name, reference=f"tester-{name}")
+
+    def create(
+        self,
+        stack: StackSpec,
+        image: ImageInfo,
+        workspace: Path,
+        trial_id: str,
+        auth: AgentAuthConfig | None = None,
+    ) -> EnvironmentHandle:
+        self._maybe_fail("create")
+        self.calls.append(("auth", auth))
+        return EnvironmentHandle(
+            environment_id=trial_id, trial_id=trial_id, stack_id=stack.id, image=image,
+            workspace=workspace, container_id=f"c-{trial_id}", network_id=f"n-{trial_id}",
+        )  # fmt: skip
+
+    def start(self, handle: EnvironmentHandle, timeout_seconds: int) -> None:
+        self._maybe_fail("start")
+
+    def exec(
+        self,
+        handle: EnvironmentHandle,
+        command: Sequence[str],
+        *,
+        timeout_seconds: int,
+        env: Mapping[str, str] | None = None,
+        workdir: str | None = None,
+        stdout_path: Path | None = None,
+        stderr_path: Path | None = None,
+    ) -> CommandResult:
+        cmd = list(command)
+        self.calls.append(("exec", cmd))
+        out, err, code = "", "", 0
+        script = cmd[-1] if cmd[:2] == ["sh", "-c"] else ""
+        if "rev-parse HEAD" in script:
+            out = "abc123\n"
+        elif script.startswith("git diff --numstat"):
+            out = "10\t2\tapp.py\n5\t0\tstart.sh\n-\t-\tlogo.png\n"
+        elif cmd and cmd[0] == "fake":
+            if cmd[1:2] == ["--version"]:
+                out = "fake 1.0.0\n"
+            else:
+                err, code = self.agent_stderr, self.agent_exit
+        for path, text in ((stdout_path, out), (stderr_path, err)):
+            if path is not None:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(text)
+        return CommandResult(
+            command=cmd, exit_code=code, stdout=out, stderr=err, duration_seconds=0.01
+        )
+
+    def exec_detached(
+        self,
+        handle: EnvironmentHandle,
+        command: Sequence[str],
+        *,
+        env: Mapping[str, str] | None = None,
+        workdir: str | None = None,
+    ) -> None:
+        self.calls.append(("exec_detached", list(command)))
+
+    def restart(self, handle: EnvironmentHandle, timeout_seconds: int) -> None:
+        self.calls.append(("restart", None))
+
+    def run_job(
+        self,
+        handle: EnvironmentHandle,
+        image: ImageInfo,
+        command: Sequence[str],
+        *,
+        timeout_seconds: int,
+        mounts: Sequence[Mount] = (),
+        env: Mapping[str, str] | None = None,
+        stdout_path: Path | None = None,
+        stderr_path: Path | None = None,
+    ) -> CommandResult:
+        self.calls.append(("run_job", {"image": image.reference, "env": dict(env or {})}))
+        results = next(m.source for m in mounts if m.target == "/results")
+        if self.junit is not None:
+            (results / "junit.xml").write_text(self.junit)
+        return CommandResult(
+            command=list(command),
+            exit_code=None if self.tester_timeout else self.tester_exit,
+            timed_out=self.tester_timeout,
+            duration_seconds=0.1,
+        )
+
+    def copy_into(self, handle: EnvironmentHandle, source: Path, destination: str) -> None:
+        self.calls.append(("copy_into", destination))
+
+    def collect_logs(self, handle: EnvironmentHandle, destination: Path) -> dict[str, Path]:
+        self._maybe_fail("collect_logs")
+        return {}
+
+    def destroy(self, handle: EnvironmentHandle) -> None:
+        self.destroyed.append(handle.trial_id)
+        self._maybe_fail("destroy")

@@ -4,12 +4,18 @@ language_version: "3.12"
 framework: fastapi
 framework_version: "0.115"
 description: Python 3.12 with FastAPI, uvicorn and pytest, backed by PostgreSQL.
-# Pinned base image. A dedicated Dockerfile under environments/ replaces this in Phase 2.
-image: python:3.12.7-slim-bookworm
+# Built from fastapi/Dockerfile; the preinstalled versions are in fastapi/requirements.txt.
+dockerfile: fastapi/Dockerfile
+build_context: fastapi/
 workdir: /workspace
+environment_notes: |
+  - PostgreSQL 16 is running at host "postgres", port 5432. Its connection URL is in
+    the DATABASE_URL environment variable (postgresql://user:password@host:port/db).
+  - Preinstalled Python packages (pinned): fastapi, uvicorn, pydantic, pydantic-settings,
+    sqlalchemy, alembic, psycopg (v3), httpx and pytest. pip installs extra packages for
+    your user. Commit any extra dependencies to requirements.txt.
 env:
   DATABASE_URL: postgresql://bench:bench@postgres:5432/bench
-  PYTHONDONTWRITEBYTECODE: "1"
 setup_commands: []
 services:
   - name: postgres
