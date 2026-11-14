@@ -148,6 +148,7 @@ def test_exec_marks_timeout(tmp_path: Path) -> None:
     res = e.exec(handle, ["sleep", "100"], timeout_seconds=1, stdout_path=tmp_path / "o.log")
     assert res.timed_out and not res.ok
     assert cli.calls[-1][-6:] == ["timeout", "-k", "10", "1", "sleep", "100"]
+    assert "-i" not in cli.calls[-1], "the agent must never get the terminal's stdin"
     assert (tmp_path / "o.log").exists()
 
 
@@ -168,3 +169,64 @@ def test_docker_cli_reads_environment_at_call_time(monkeypatch: Any) -> None:
     env = cli._env()
     assert env["LATE_SECRET"] == "s3cret"
     assert env["DOCKER_HOST"] == "unix:///tmp/d.sock"
+
+
+def test_docker_cli_never_inherits_stdin(monkeypatch: Any) -> None:
+    from ai_benchmark.environment.docker import DockerCLI
+
+    seen: list[dict[str, Any]] = []
+
+    def fake_run(cmd: Any, **kw: Any) -> subprocess.CompletedProcess[str]:
+        seen.append(kw)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cli = DockerCLI("docker")
+    cli.run(["exec", "c", "codex", "exec"])
+    cli.run(["build", "-"], input="FROM x\n")
+    assert seen[0]["stdin"] is subprocess.DEVNULL
+    assert seen[1]["stdin"] is None and seen[1]["input"] == "FROM x\n"
+
+
+def test_build_streams_to_log_and_reports_failure(monkeypatch: Any, tmp_path: Path) -> None:
+    from ai_benchmark.errors import ExecutionEnvironmentError
+
+    monkeypatch.setattr("tempfile.gettempdir", lambda: str(tmp_path))
+
+    class FailingBuild(FakeCLI):
+        def run(self, args: Any, **kw: Any) -> subprocess.CompletedProcess[str]:
+            if list(args)[0] == "build":
+                self.calls.append(list(args))
+                assert kw["extra_env"] == {"BUILDKIT_PROGRESS": "plain"}
+                kw["stdout"].write("#7 [4/6] RUN npm install -g x\nnpm error network\n")
+                return subprocess.CompletedProcess(list(args), 1, "", "")
+            return super().run(args, **kw)
+
+    e = env(FailingBuild())
+    stack_image = ImageInfo(stack_id="fastapi", reference="python:3.12")
+    with pytest.raises(ExecutionEnvironmentError, match="npm error network") as err:
+        e.prepare_agent_image(stack_image, LAYER)
+    assert "full log: " in str(err.value)
+    logs = list(tmp_path.glob("ai-benchmark-builds-*/*.log"))
+    assert len(logs) == 1 and "npm error network" in logs[0].read_text()
+    assert logs[0].parent.stat().st_mode & 0o077 == 0
+
+
+def test_build_timeout_is_an_infra_error(monkeypatch: Any, tmp_path: Path) -> None:
+    from ai_benchmark.errors import ExecutionEnvironmentError
+
+    monkeypatch.setattr("tempfile.gettempdir", lambda: str(tmp_path))
+
+    class SlowBuild(FakeCLI):
+        def run(self, args: Any, **kw: Any) -> subprocess.CompletedProcess[str]:
+            if list(args)[0] == "build":
+                assert kw["timeout"] == 120
+                raise subprocess.TimeoutExpired(list(args), 120)
+            return super().run(args, **kw)
+
+    e = DockerExecutionEnvironment(
+        DockerSettings(agent_uid=1000, build_timeout_seconds=120),
+        cli=SlowBuild(),  # type: ignore[arg-type]
+    )
+    with pytest.raises(ExecutionEnvironmentError, match="longer than 120s"):
+        e.prepare_agent_image(ImageInfo(stack_id="fastapi", reference="python:3.12"), LAYER)

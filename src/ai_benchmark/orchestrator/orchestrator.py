@@ -59,6 +59,7 @@ from ai_benchmark.orchestrator.junit import parse_junit
 from ai_benchmark.orchestrator.plan import ExperimentPlan, PlannedTrial, build_plan
 from ai_benchmark.orchestrator.policy import apply_auth_policy
 from ai_benchmark.orchestrator.timing import Stopwatch, utcnow
+from ai_benchmark.progress import AgentHeartbeat, format_duration
 from ai_benchmark.storage.base import ResultStore
 
 log = logging.getLogger(__name__)
@@ -309,15 +310,19 @@ class BenchmarkOrchestrator:
             workspace = self.workspaces.create(plan.run_id, trial.trial_id, task, stack.id)
             log_dir.mkdir(parents=True, exist_ok=True)
 
+            _phase(trial.trial_id, "preparing images")
             stack_image = self.environment.prepare_image(stack)
             image = self.environment.prepare_agent_image(stack_image, adapter.image_layer())
             result.environment.image_ref = stack_image.reference
             result.environment.image_digest = stack_image.digest
             result.environment.agent_image_ref = image.reference
 
+            _phase(trial.trial_id, "starting containers")
             handle = self.environment.create(stack, image, workspace, trial.trial_id, auth)
             self.environment.start(handle, plan.timeouts.setup_seconds)
             runner = self.environment.runner(handle)
+            if stack.setup_commands:
+                _phase(trial.trial_id, f"running {len(stack.setup_commands)} setup command(s)")
             for i, cmd in enumerate(stack.setup_commands):
                 res = runner.run(
                     cmd,
@@ -343,7 +348,18 @@ class BenchmarkOrchestrator:
                 tooling=config.tooling,
                 options=trial.agent.options,
             )
-            agent_result = self.execute_agent(adapter, agent_task, runner)
+            _phase(
+                trial.trial_id,
+                f"agent running (limit {format_duration(agent_task.timeout_seconds)}), "
+                f"output: {log_dir / 'agent.stdout.log'}",
+            )
+            with AgentHeartbeat(
+                trial.trial_id,
+                log_dir / "agent.stdout.log",
+                agent_task.timeout_seconds,
+                self.settings.progress_interval_seconds,
+            ):
+                agent_result = self.execute_agent(adapter, agent_task, runner)
             self._record_agent(result, agent_result)
 
             change = snapshot_result(runner, stack.workdir)
@@ -358,6 +374,7 @@ class BenchmarkOrchestrator:
                 change.files_changed, MetricSource.MEASURED
             )
 
+            _phase(trial.trial_id, "running acceptance tests")
             quality, test_logs, tester_ok = self.run_acceptance_tests(
                 task, stack, handle, log_dir, plan
             )
@@ -384,6 +401,11 @@ class BenchmarkOrchestrator:
             wall.stop(), MetricSource.MEASURED, unit="s"
         )
         result.metrics = apply_auth_policy(result.metrics, plan.auth_mode)
+        _phase(
+            trial.trial_id,
+            f"{result.status.value} in "
+            f"{format_duration(result.metrics.performance.total_wall_clock_seconds.value or 0)}",
+        )
         return result
 
     def _cleanup(self, handle: EnvironmentHandle, log_dir: Path, result: TrialResult) -> None:
@@ -531,8 +553,10 @@ class BenchmarkOrchestrator:
         quality.tests_failed = Metric[int].of(summary.failed, MetricSource.MEASURED)
         quality.repair_iterations = Metric[int].of(0, MetricSource.MEASURED)
         quality.retry_count = Metric[int].of(0, MetricSource.MEASURED)
-        # A tester that timed out or crashed after writing a report did not finish the suite.
-        return quality, files, res.ok
+        # A tester that timed out or crashed after writing a report did not finish the
+        # suite. Failing tests are a normal ending (pytest exits 1 for them).
+        finished = not res.timed_out and res.exit_code in spec.completed_exit_codes
+        return quality, files, finished
 
 
 def _final_status(
@@ -564,3 +588,7 @@ def _platform_commit() -> str | None:
     except (OSError, subprocess.TimeoutExpired):
         return None
     return out.stdout.strip() or None
+
+
+def _phase(trial_id: str, message: str) -> None:
+    log.info("trial %s: %s", trial_id, message)

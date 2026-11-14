@@ -1,0 +1,30 @@
+id: fastapi-latest
+language: python
+language_version: "3.15.2"
+framework: fastapi
+framework_version: "0.162.6"
+description: Python 3.15.2 and FastAPI 0.162.6, backed by PostgreSQL 18.7.
+dockerfile: fastapi-latest/Dockerfile
+build_context: fastapi-latest/
+workdir: /workspace
+environment_notes: |
+  - PostgreSQL 18.7 is running at host "postgres", port 5432. Its connection URL is in
+    the DATABASE_URL environment variable (postgresql://user:password@host:port/db).
+  - Preinstalled Python packages are pinned in the stack requirements.txt:
+    fastapi, uvicorn, pydantic, pydantic-settings, sqlalchemy, alembic, psycopg,
+    httpx and pytest. Commit any extra dependencies to requirements.txt.
+env:
+  DATABASE_URL: postgresql://bench:bench@postgres:5432/bench
+setup_commands: []
+services:
+  - name: postgres
+    image: postgres:18.7-alpine
+    env:
+      POSTGRES_USER: bench
+      POSTGRES_PASSWORD: bench
+      POSTGRES_DB: bench
+    ports: [5432]
+    healthcheck: [pg_isready, -U, bench]
+resources:
+  cpus: 2
+  memory: 4g

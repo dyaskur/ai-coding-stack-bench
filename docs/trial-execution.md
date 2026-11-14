@@ -25,6 +25,8 @@ What `benchmark run` does for each trial, in order. The code lives in
 - The app container runs `sleep infinity` as the non-root user with
   `no-new-privileges`, the stack's resource limits, and the fresh workspace
   bind-mounted at the stack's `workdir`.
+- Commands run with `docker exec` without `-i` and with stdin closed, so an
+  agent can never wait on the terminal that started the benchmark.
 - Secrets are passed as `--env NAME`, so values never appear in a command
   line or a log. Credential files are copied in with mode 600.
 - Every container and network carries `io.ai-benchmark.*` labels, and is
@@ -53,6 +55,9 @@ The agent never sees the suite. After the agent finishes:
    `/results/junit.xml`).
 4. The JUnit XML is parsed per test case. A missing or empty report means
    zero passed tests, never a pass.
+5. The tester must also finish the suite: an exit code outside the suite's
+   `completed_exit_codes` (default 0 and 1, since pytest exits 1 when tests
+   fail) or a timeout keeps the trial from passing and is named in its error.
 
 The tester image is the task's `acceptance_tests.image` if set, otherwise it
 is built from the `Dockerfile` in the suite folder.
@@ -64,6 +69,17 @@ at), `timed_out`, `rate_limited`, `agent_error`, `passed` (at least one test
 and all of them pass), otherwise `failed`. With `stop_on_infra_error`, the
 remaining trials are recorded as `cancelled`. Workspaces of `infra_error`
 trials are kept for debugging.
+
+## Watching a run
+
+`benchmark run` logs each phase of a trial (images, containers, setup, agent,
+acceptance tests, final status with its duration). While the agent works, it
+also logs a heartbeat every 30 seconds with the elapsed time against the
+limit, the number of output lines and a summary of the agent's latest event.
+Image builds report their current step the same way and stream their full output to a private `$TMPDIR/ai-benchmark-builds-*/<image>.log` directory; a build that takes longer than `docker.build_timeout_seconds` (default 1800, env `BENCHMARK_DOCKER__BUILD_TIMEOUT_SECONDS`) fails the trial as an infra error. Set `BENCHMARK_PROGRESS_INTERVAL_SECONDS` to change the interval, or `0` to
+turn it off. The agent's full output is streamed to
+`.workspaces/<run>/<trial>/logs/agent.stdout.log`, so `tail -f` on it shows
+every event.
 
 ## Running the Docker integration test
 

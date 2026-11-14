@@ -49,6 +49,7 @@ from ai_benchmark.environment.base import (
     Mount,
 )
 from ai_benchmark.errors import ExecutionEnvironmentError
+from ai_benchmark.progress import BuildHeartbeat
 
 log = logging.getLogger(__name__)
 
@@ -84,15 +85,19 @@ class DockerCLI:
         check: bool = True,
         stdout: IO[str] | None = None,
         stderr: IO[str] | None = None,
+        extra_env: Mapping[str, str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
         cmd = [self.binary, *args]
         try:
             proc = subprocess.run(
                 cmd,
                 input=input,
+                # Never inherit the terminal's stdin: a command that reads it would
+                # block on the person running the benchmark.
+                stdin=subprocess.DEVNULL if input is None else None,
                 text=True,
                 timeout=timeout,
-                env=self._env(),
+                env={**self._env(), **(extra_env or {})},
                 stdout=stdout if stdout is not None else subprocess.PIPE,
                 stderr=stderr if stderr is not None else subprocess.PIPE,
                 check=False,
@@ -161,7 +166,8 @@ def _node_install_script(version: str) -> str:
         "else "
         'case "$(uname -m)" in x86_64) a=x64;; aarch64|arm64) a=arm64;; '
         '*) echo "unsupported arch $(uname -m)" >&2; exit 1;; esac; '
-        f"curl -fsSL https://nodejs.org/dist/v{version}/node-v{version}-linux-$a.tar.xz "
+        "curl -fsSL --retry 3 --connect-timeout 20 --max-time 600 "
+        f"https://nodejs.org/dist/v{version}/node-v{version}-linux-$a.tar.xz "
         f"| tar -xJ -C /opt && mv /opt/node-v{version}-linux-$a {AGENT_NODE_DIR}; fi"
     )
 
@@ -244,11 +250,35 @@ class DockerExecutionEnvironment(ExecutionEnvironment):
         return out.strip()
 
     def _build(self, tag: str, dockerfile_text: str, context: Path) -> None:
-        log.info("building image %s", tag)
-        self.cli.run(
-            ["build", "-q", "-t", tag, *self._label_args(), "-f", "-", str(context)],
-            input=dockerfile_text,
-        )
+        # Builds can take minutes (toolchains, agent CLIs), so stream the output
+        # to a log file, report the current step while it runs, and bound it.
+        build_log = _build_log_path(tag)
+        limit = self.settings.build_timeout_seconds
+        log.info("building image %s (limit %ds), log: %s", tag, limit, build_log)
+        args = ["build", "-t", tag, *self._label_args(), "-f", "-", str(context)]
+        with build_log.open("w", encoding="utf-8") as out, BuildHeartbeat(tag, build_log):
+            try:
+                proc = self.cli.run(
+                    args,
+                    input=dockerfile_text,
+                    timeout=limit,
+                    check=False,
+                    stdout=out,
+                    stderr=out,
+                    # Plain step-by-step output from BuildKit; the classic builder
+                    # ignores it and prints its steps anyway.
+                    extra_env={"BUILDKIT_PROGRESS": "plain"},
+                )
+            except subprocess.TimeoutExpired as exc:
+                raise ExecutionEnvironmentError(
+                    f"building image {tag} took longer than {limit}s; last output:\n"
+                    f"{_tail(build_log)[-2000:]}\nfull log: {build_log}"
+                ) from exc
+        if proc.returncode != 0:
+            raise ExecutionEnvironmentError(
+                f"building image {tag} failed ({proc.returncode}); last output:\n"
+                f"{_tail(build_log)[-2000:]}\nfull log: {build_log}"
+            )
 
     # -- images ------------------------------------------------------------
 
@@ -410,9 +440,12 @@ class DockerExecutionEnvironment(ExecutionEnvironment):
             parent = posixpath.dirname(target)
             self._root_exec(handle, f"mkdir -p {shlex.quote(parent)}")
             self.cli.run(["cp", str(source), f"{handle.container_id}:{target}"])
+            # Every directory created on the way must belong to the agent, or a CLI
+            # can't add siblings later (e.g. ~/.local/state next to ~/.local/share).
+            owned = AGENT_HOME if target.startswith(AGENT_HOME + "/") else parent
             self._root_exec(
                 handle,
-                f"chown -R {self.agent_uid} {shlex.quote(posixpath.dirname(target))} "
+                f"chown -R {self.agent_uid} {shlex.quote(owned)} "
                 f"&& chmod 600 {shlex.quote(target)}",
             )
         self._root_exec(handle, f"mkdir -p {AGENT_HOME} && chown {self.agent_uid} {AGENT_HOME}")
@@ -453,7 +486,10 @@ class DockerExecutionEnvironment(ExecutionEnvironment):
         stderr_path: Path | None = None,
     ) -> CommandResult:
         assert handle.container_id
-        args = ["exec", "-i"]
+        # No -i: nothing in a trial reads stdin, and an attached stdin would hand
+        # the agent the terminal running the benchmark (codex exec, for one,
+        # reads stdin to EOF before it starts and would wait forever).
+        args = ["exec"]
         if workdir:
             args += ["-w", workdir]
         for k, v in (env or {}).items():
@@ -632,3 +668,8 @@ def _tail(path: Path) -> str:
         if size > _OUTPUT_LIMIT:
             fh.seek(size - _OUTPUT_LIMIT)
         return fh.read().decode("utf-8", errors="replace")
+
+
+def _build_log_path(tag: str) -> Path:
+    safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in tag)
+    return Path(tempfile.mkdtemp(prefix="ai-benchmark-builds-")) / f"{safe}.log"

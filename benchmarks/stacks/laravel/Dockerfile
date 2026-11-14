@@ -1,4 +1,4 @@
-# Laravel stack: PHP 8.3 CLI with the extensions Laravel 11 and MySQL need,
+# Laravel stack: PHP 8.3 CLI with the extensions Laravel and MySQL need,
 # plus a pinned Composer. The agent creates the Laravel project itself.
 FROM composer:2.8.3 AS composer
 

@@ -104,11 +104,25 @@ def test_passing_trial_is_recorded(env_settings: PlatformSettings) -> None:
 
 
 def test_failed_tests_mark_trial_failed(env_settings: PlatformSettings) -> None:
-    o = build(env_settings, FakeEnvironment(junit=JUNIT_ONE_FAIL))
+    env = FakeEnvironment(junit=JUNIT_ONE_FAIL)
+    env.tester_exit = 1  # what pytest returns when tests fail
+    o = build(env_settings, env)
     summary = o.run(experiment())
     [r] = list(o.store.iter_trials())
     assert summary.by_status == {"failed": 1}
     assert r.metrics.quality.tests_failed.value == 1
+    assert r.error is None  # failing tests are a result, not a tester problem
+
+
+def test_interrupted_tester_is_reported(env_settings: PlatformSettings) -> None:
+    env = FakeEnvironment()
+    env.tester_exit = 2  # pytest: interrupted, e.g. a collection error
+    o = build(env_settings, env)
+    o.run(experiment())
+    [r] = list(o.store.iter_trials())
+    assert r.status is TrialStatus.FAILED
+    assert r.metrics.quality.tests_passed.value == r.metrics.quality.tests_total.value == 2
+    assert r.error and "tester did not finish" in r.error
 
 
 def test_missing_junit_makes_tests_unavailable(env_settings: PlatformSettings) -> None:

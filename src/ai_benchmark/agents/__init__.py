@@ -1,4 +1,4 @@
-"""Agent adapter interface and registry. Concrete adapters arrive in Phase 2."""
+"""Agent adapter interface, registry and the built-in adapters."""
 
 from ai_benchmark.agents.base import (
     AgentAdapter,
@@ -22,3 +22,6 @@ __all__ = [
     "default_registry",
     "register_agent",
 ]
+
+# Built-in adapters register themselves in ``default_registry`` on import.
+from ai_benchmark.agents import claude_code, codex, opencode  # noqa: E402, F401

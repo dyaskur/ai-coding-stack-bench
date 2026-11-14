@@ -142,6 +142,7 @@ class FakeEnvironment(ExecutionEnvironment):
     ) -> None:
         self.junit = junit
         self.tester_timeout = False
+        self.tester_exit = 0
         self.agent_stderr = agent_stderr
         self.agent_exit = agent_exit
         self.fail_on = fail_on
@@ -246,7 +247,7 @@ class FakeEnvironment(ExecutionEnvironment):
             (results / "junit.xml").write_text(self.junit)
         return CommandResult(
             command=list(command),
-            exit_code=None if self.tester_timeout else 0,
+            exit_code=None if self.tester_timeout else self.tester_exit,
             timed_out=self.tester_timeout,
             duration_seconds=0.1,
         )

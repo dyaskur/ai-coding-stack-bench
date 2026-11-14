@@ -4,11 +4,10 @@ An open-source platform that measures and compares how productive AI coding
 agents (Codex CLI, Claude Code, OpenCode, and more) are across programming
 languages and frameworks.
 
-> **Status: Phase 1 (foundation).** The configuration schemas, agent adapter
-> interface, Docker environment and orchestrator skeletons, result storage and
-> CLI skeleton are in place. Nothing executes agents yet. See
-> [ARCHITECTURE.md](ARCHITECTURE.md) for the full vision and
-> [docs/phase-1.md](docs/phase-1.md) for what exists and what comes next.
+> **Status: Phase 2 (execution).** Trials run in Docker end to end with the
+> built-in Claude Code, Codex CLI and OpenCode adapters
+> ([docs/agents.md](docs/agents.md)). Reports and the dashboard come in later
+> phases. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full vision.
 
 ## Install (development)
 
@@ -39,6 +38,25 @@ benchmark results [--agent X --stack Y --mode standard --not-rate-limited ...]
 benchmark report                     # Phase 3
 ```
 
+The `fastapi-latest`, `express-latest`, and `laravel13-boost` stacks pin the
+newer runtime and framework versions used for the updated benchmark. The
+`laravel13-boost` stack provides a Laravel 13 starter project and installs
+Laravel Boost before the agent starts. Boost guidelines, skills, and MCP tools
+are available to supported agents. Setup time is outside the agent timer, and
+this stack starts from a scaffold; compare it separately from the empty-folder
+`laravel` (Laravel 11) baseline. For example:
+
+```bash
+benchmark run --agents codex:gpt-6-luna --task task-management-api \
+              --stacks fastapi-latest,laravel13-boost,express-latest \
+              --trials 20 --auth subscription
+```
+
+The [20-trial Luna results](docs/luna-latest-20-trials.md) record the run IDs,
+test outcomes, timing, token use, cost estimate, and differences in each
+stack's starting state. Laravel setup retries transient Composer failures
+before the agent starts.
+
 Platform settings come from `BENCHMARK_*` environment variables (nested with
 `__`, e.g. `BENCHMARK_DOCKER__DEFAULT_MEMORY_LIMIT=8g`) or global CLI options
 such as `--results-dir`.
@@ -50,7 +68,7 @@ src/ai_benchmark/
   cli/            Typer entry point (`benchmark`)
   config/         Pydantic schemas: tasks, stacks, experiments, platform settings; YAML/JSON loader
   models/         Enums, metric schemas (with explicit availability), result records
-  agents/         AgentAdapter interface + registry (entry-point group `ai_benchmark.agents`)
+  agents/         AgentAdapter interface, registry, built-in claude/codex/opencode adapters
   environment/    ExecutionEnvironment interface, Docker implementation, per-trial workspaces
   orchestrator/   Planning (randomized, seeded), trial execution, git metrics, JUnit parsing
   storage/        ResultStore interface + atomic JSON file store

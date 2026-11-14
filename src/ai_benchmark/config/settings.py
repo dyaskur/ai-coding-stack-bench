@@ -35,6 +35,9 @@ class DockerSettings(BaseModel):
     agent_node_version: str = Field(
         default="22.11.0", description="Pinned Node.js added to agent images that need it."
     )
+    build_timeout_seconds: int = Field(
+        default=1800, ge=60, description="Longest a single image build may take."
+    )
     docker_binary: str = "docker"
 
 
@@ -48,6 +51,11 @@ class PlatformSettings(BaseSettings):
     results_dir: Path = Path("results")
     workspaces_dir: Path = Path(".workspaces")
     keep_workspaces: bool = Field(default=False, description="Keep trial workspaces after a run.")
+    progress_interval_seconds: float = Field(
+        default=30,
+        ge=0,
+        description="How often a running agent's progress is logged; 0 turns it off.",
+    )
     log_level: str = "INFO"
     log_format: Literal["json", "text"] = "text"
     docker: DockerSettings = Field(default_factory=DockerSettings)
